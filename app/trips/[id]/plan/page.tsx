@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { AddItemForm } from "./add-item-form";
 import { ItineraryItemRow } from "./item-row";
+import { AIDraftButton } from "./ai-draft-button";
 
 type Slot = "morning" | "afternoon" | "evening" | "any";
 
@@ -132,7 +133,7 @@ export default async function PlanPage({
               : null;
             return (
               <section key={dayIndex} className="card p-4">
-                <header className="flex items-baseline justify-between mb-3 pb-3 border-b border-[color:var(--color-line)]">
+                <header className="flex items-center justify-between mb-3 pb-3 border-b border-[color:var(--color-line)] gap-3">
                   <div>
                     <div className="text-[10px] uppercase tracking-widest text-[color:var(--color-muted)]">
                       Day {dayIndex + 1}
@@ -141,9 +142,12 @@ export default async function PlanPage({
                       {weekday && dateStr ? `${weekday} ${dateStr}` : `Day ${dayIndex + 1}`}
                     </div>
                   </div>
-                  <span className="text-xs text-[color:var(--color-muted)]">
-                    {dayItems.length} item{dayItems.length === 1 ? "" : "s"}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[color:var(--color-muted)]">
+                      {dayItems.length} item{dayItems.length === 1 ? "" : "s"}
+                    </span>
+                    <AIDraftButton tripId={trip.id} dayIndex={dayIndex} />
+                  </div>
                 </header>
 
                 <div className="space-y-4">

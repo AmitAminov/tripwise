@@ -10,6 +10,7 @@
 import { mockFlightProvider } from "./flights/mock";
 import { fastFlightsProvider } from "./flights/fast-flights";
 import { googlePlacesProvider } from "./places/google";
+import { geminiImageProvider } from "./images/gemini";
 import type {
   EventsProvider,
   FlightProvider,
@@ -42,7 +43,8 @@ export function hotelProvider(): HotelProvider | null {
 }
 
 export function imageProvider(): ImageProvider | null {
-  return null;
+  if (!process.env.GEMINI_API_KEY) return null;
+  return geminiImageProvider;
 }
 
 export function weatherProvider(): WeatherProvider | null {

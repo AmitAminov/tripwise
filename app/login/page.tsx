@@ -1,11 +1,16 @@
 "use client";
 
 import { useActionState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { login, type LoginState } from "./actions";
 
 const initialState: LoginState = {};
 
-export default function LoginPage() {
+function LoginForm() {
+  const params = useSearchParams();
+  const next = params.get("next") ?? "/";
+  const errorDetail = params.get("detail");
   const [state, formAction, pending] = useActionState(login, initialState);
 
   return (
@@ -22,6 +27,7 @@ export default function LoginPage() {
           </div>
         ) : (
           <form action={formAction} className="space-y-4">
+            <input type="hidden" name="next" value={next} />
             <label className="block">
               <span className="block text-sm mb-2 text-[color:var(--color-muted)]">
                 Email
@@ -39,6 +45,11 @@ export default function LoginPage() {
             {state.error && (
               <p className="text-sm text-red-400">{state.error}</p>
             )}
+            {errorDetail && !state.error && (
+              <p className="text-sm text-red-400">
+                Sign-in failed: {errorDetail}
+              </p>
+            )}
 
             <button
               type="submit"
@@ -51,5 +62,13 @@ export default function LoginPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

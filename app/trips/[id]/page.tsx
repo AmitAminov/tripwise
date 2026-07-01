@@ -7,9 +7,9 @@ import { formatDateRange } from "@/lib/format";
 
 const V2_TABS = [
   { slug: "flights", label: "Flights", note: "real prices via fast-flights", ready: true },
+  { slug: "attractions", label: "Attractions", note: "Google Places (New)", ready: true },
+  { slug: "attractions?kind=restaurants", label: "Restaurants", note: "Google Places (New)", ready: true },
   { slug: "hotels", label: "Hotels", note: "estimates + deep links", ready: false },
-  { slug: "attractions", label: "Attractions", note: "Google Places", ready: false },
-  { slug: "restaurants", label: "Restaurants", note: "Google Places", ready: false },
   { slug: "plan", label: "Day plan", note: "AI-generated draft", ready: false },
   { slug: "decisions", label: "Decisions", note: "the reveal mechanic", ready: false },
 ] as const;

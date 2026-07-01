@@ -9,6 +9,7 @@
 
 import { mockFlightProvider } from "./flights/mock";
 import { fastFlightsProvider } from "./flights/fast-flights";
+import { googlePlacesProvider } from "./places/google";
 import type {
   EventsProvider,
   FlightProvider,
@@ -28,11 +29,8 @@ export function flightProvider(): FlightProvider {
 }
 
 export function placesProvider(): PlacesProvider | null {
-  // Google Places wires up when GOOGLE_MAPS_API_KEY is present and
-  // the "Places API (New)" is enabled on the project. Wired in a
-  // follow-up iteration; returning null here means callers can render
-  // "provider not configured" and keep the page usable.
-  return null;
+  if (!process.env.GOOGLE_MAPS_API_KEY) return null;
+  return googlePlacesProvider;
 }
 
 export function eventsProvider(): EventsProvider | null {

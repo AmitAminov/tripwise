@@ -14,6 +14,7 @@ const V2_TABS = [
   { slug: "map", label: "Map", note: "pins + day filter", ready: true },
   { slug: "pricing", label: "Pricing dashboard", note: "aggregated estimates", ready: true },
   { slug: "events", label: "Events", note: "curated + Ticketmaster (opt.)", ready: true },
+  { slug: "visuals", label: "AI Visuals", note: "Nano Banana mood board", ready: true },
   { slug: "decisions", label: "Decisions", note: "the reveal mechanic", ready: true },
 ] as const;
 

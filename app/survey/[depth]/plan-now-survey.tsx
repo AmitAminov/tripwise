@@ -46,6 +46,7 @@ export function PlanNowSurvey() {
     interests.forEach((i) => formData.append("interests", i));
     formData.set("comfort", comfort);
     formData.set("pace", pace);
+    formData.set("planning_depth", "plan_now");
     startTransition(() => submitPlanNow(formData));
   }
 

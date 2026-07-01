@@ -81,8 +81,8 @@ export default async function FlightsPage({
             Where and when are we flying?
           </h1>
           <p className="text-[color:var(--color-fg-2)] mt-1">
-            Real prices via fast-flights (Google Flights). Prices are shown
-            in the source currency until FX conversion is wired.
+            Real prices via fast-flights (Google Flights), converted to USD
+            with daily FX.
           </p>
         </div>
 

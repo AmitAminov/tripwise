@@ -301,7 +301,8 @@ export default async function PricingPage({
 
         {/* Line items */}
         <div className="card overflow-hidden mb-6">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[560px]">
             <thead>
               <tr className="border-b border-[color:var(--color-line)] bg-[color:var(--color-surface-2)]">
                 <th className="text-left px-4 py-3 text-xs uppercase tracking-widest text-[color:var(--color-muted)]">
@@ -357,6 +358,7 @@ export default async function PricingPage({
               </tr>
             </tbody>
           </table>
+        </div>
         </div>
 
         <p className="text-xs text-[color:var(--color-muted)]">

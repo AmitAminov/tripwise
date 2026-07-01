@@ -4,12 +4,22 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { NewTripForm } from "./form";
 
-export default async function NewTripPage() {
+export default async function NewTripPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[]>>;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  const sp = await searchParams;
+  const destinationParam = Array.isArray(sp.destination)
+    ? sp.destination[0]
+    : sp.destination;
+  const nameParam = Array.isArray(sp.name) ? sp.name[0] : sp.name;
 
   return (
     <>
@@ -24,7 +34,10 @@ export default async function NewTripPage() {
           </Link>
         </div>
         <h1 className="font-serif text-3xl mb-6">New trip</h1>
-        <NewTripForm />
+        <NewTripForm
+          defaultName={nameParam}
+          defaultDestination={destinationParam}
+        />
       </main>
     </>
   );

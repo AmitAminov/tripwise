@@ -5,7 +5,13 @@ import { createTrip, type CreateTripState } from "../actions";
 
 const initialState: CreateTripState = {};
 
-export function NewTripForm() {
+export function NewTripForm({
+  defaultName,
+  defaultDestination,
+}: {
+  defaultName?: string;
+  defaultDestination?: string;
+}) {
   const [state, formAction, pending] = useActionState(createTrip, initialState);
 
   return (
@@ -17,7 +23,8 @@ export function NewTripForm() {
           name="name"
           required
           maxLength={120}
-          placeholder="Autumn 2026"
+          defaultValue={defaultName ?? ""}
+          placeholder={defaultDestination ? `${defaultDestination} · Autumn 2026` : "Autumn 2026"}
           className="field"
         />
       </label>
@@ -28,7 +35,8 @@ export function NewTripForm() {
           type="text"
           name="destination"
           maxLength={120}
-          placeholder="Lisbon, Portugal"
+          defaultValue={defaultDestination ?? ""}
+          placeholder="Bangkok · Prague · Naples"
           className="field"
         />
       </label>

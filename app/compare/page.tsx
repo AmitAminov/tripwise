@@ -144,7 +144,7 @@ export default async function ComparePage({
 
         {/* Hero row (unranked mode) */}
         {!intent && (
-          <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             {filtered.map((d) => {
               const [c1, c2] = d.gradient;
               return (
@@ -191,7 +191,8 @@ export default async function ComparePage({
 
         {/* Comparison table */}
         <div className="card overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <tbody>
               {ROWS.map((row, i) => (
                 <tr
@@ -220,6 +221,7 @@ export default async function ComparePage({
               ))}
             </tbody>
           </table>
+        </div>
         </div>
 
         {!intent && (

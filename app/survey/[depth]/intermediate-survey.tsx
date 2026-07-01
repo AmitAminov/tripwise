@@ -103,10 +103,29 @@ export function IntermediateSurvey({ deep }: { deep?: boolean }) {
   async function onSubmit(formData: FormData) {
     candidates.forEach((c) => formData.append("candidates", c));
     interests.forEach((i) => formData.append("interests", i));
+    accommodationTypes.forEach((t) =>
+      formData.append("accommodation_types", t),
+    );
+    accommodationAmenities.forEach((a) =>
+      formData.append("accommodation_amenities", a),
+    );
+    dietary.forEach((d) => formData.append("dietary", d));
     formData.set("comfort", comfort);
     formData.set("pace", pace);
-    // Extra fields are informational — Plan Now action stores what it uses;
-    // the rest is captured in the intent JSON when we add richer submit.
+    formData.set("group_type", groupType);
+    formData.set("direct_only", String(directOnly));
+    formData.set("hidden_gems", String(hiddenGems));
+    formData.set("iconic_landmarks", String(iconicLandmarks));
+    formData.set("avoid_long_walks", String(avoidLongWalks));
+    formData.set("avoid_driving", String(avoidDriving));
+    if (deep) {
+      formData.set("visa_tolerance", visaTol);
+      formData.set("safety_tolerance", safetyTol);
+    }
+    formData.set(
+      "planning_depth",
+      deep ? "deep_research" : "intermediate",
+    );
     startTransition(() => submitPlanNow(formData));
   }
 

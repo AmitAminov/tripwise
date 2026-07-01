@@ -217,13 +217,20 @@ Return JSON matching the schema.`;
       const slot = it.slot as Slot;
       const pos = positionsBySlot.get(slot) ?? 0;
       positionsBySlot.set(slot, pos + 1);
+      // Tag AI-drafted notes so the provenance is preserved in the DB
+      // (spec: clearly label AI-generated content). Users can freely
+      // edit or remove the tag.
+      const rawNotes = it.notes?.slice(0, 260) ?? "";
+      const notes = rawNotes
+        ? `${rawNotes} · [AI draft]`
+        : "[AI draft]";
       return {
         trip_id: tripId,
         day_index: dayIndex,
         slot,
         position: pos,
         title: it.title.slice(0, 200),
-        notes: it.notes?.slice(0, 300) ?? null,
+        notes,
         created_by: user.id,
       };
     });

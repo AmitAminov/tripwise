@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
@@ -28,12 +29,24 @@ export default async function DestinationDetailPage({
 
       {/* Editorial hero */}
       <section
-        className="relative"
-        style={{
-          background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
-        }}
+        className="relative overflow-hidden"
+        style={
+          d.hasHero
+            ? undefined
+            : { background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)` }
+        }
       >
-        <div className="absolute inset-0 bg-black/25" />
+        {d.hasHero && (
+          <Image
+            src={`/destinations/${d.id}.png`}
+            alt={`${d.name}, ${d.country}`}
+            fill
+            sizes="100vw"
+            className="object-cover"
+            priority
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/40" />
         <div className="relative max-w-6xl mx-auto px-6 py-16 sm:py-24 text-white">
           <Link
             href="/"
@@ -52,7 +65,7 @@ export default async function DestinationDetailPage({
           </p>
           <div className="mt-6 inline-flex items-center gap-2 text-xs bg-black/30 px-3 py-1.5 rounded-full backdrop-blur-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-[color:var(--color-highlight)]" />
-            AI hero image coming (Gemini)
+            AI-generated hero · Nano Banana
           </div>
         </div>
       </section>

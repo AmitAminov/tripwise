@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { DESTINATIONS, type DestinationCard } from "@/data/destinations";
@@ -154,11 +155,24 @@ export default async function ComparePage({
                 >
                   <div
                     className="h-28 relative"
-                    style={{
-                      background: `linear-gradient(135deg, ${c1}, ${c2})`,
-                    }}
+                    style={
+                      d.hasHero
+                        ? undefined
+                        : {
+                            background: `linear-gradient(135deg, ${c1}, ${c2})`,
+                          }
+                    }
                   >
-                    <div className="absolute inset-0 bg-black/15 group-hover:bg-black/5 transition-colors" />
+                    {d.hasHero && (
+                      <Image
+                        src={`/destinations/${d.id}.png`}
+                        alt={`${d.name}, ${d.country}`}
+                        fill
+                        sizes="33vw"
+                        className="object-cover"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                     <div className="absolute inset-x-0 bottom-0 p-3 text-white">
                       <div className="font-serif text-lg leading-tight">
                         {d.name}
@@ -230,21 +244,35 @@ function RankedCard({
   rank: number;
   ranked: RankedDestination;
 }) {
-  const [c1, c2] = ranked.destination.gradient;
+  const d = ranked.destination;
+  const [c1, c2] = d.gradient;
   return (
     <div className="card overflow-hidden">
       <div
-        className="h-24 relative"
-        style={{ background: `linear-gradient(135deg, ${c1}, ${c2})` }}
+        className="h-28 relative"
+        style={
+          d.hasHero
+            ? undefined
+            : { background: `linear-gradient(135deg, ${c1}, ${c2})` }
+        }
       >
-        <div className="absolute inset-0 bg-black/20" />
+        {d.hasHero && (
+          <Image
+            src={`/destinations/${d.id}.png`}
+            alt={`${d.name}, ${d.country}`}
+            fill
+            sizes="33vw"
+            className="object-cover"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-3 text-white flex items-end justify-between">
           <div>
             <div className="text-[10px] uppercase tracking-widest opacity-80">
               Rank #{rank}
             </div>
             <div className="font-serif text-lg leading-tight">
-              {ranked.destination.name}
+              {d.name}
             </div>
           </div>
           <div className="text-right">

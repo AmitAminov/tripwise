@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { DestinationCard } from "@/data/destinations";
 import { formatUSD } from "@/lib/format";
 
@@ -13,22 +14,30 @@ export function DestinationHeroCard({
       href={`/destinations/${d.id}`}
       className="card block overflow-hidden group h-full"
     >
-      {/* Hero band — gradient placeholder until Gemini fills it */}
       <div
-        className="h-40 relative"
+        className="relative aspect-[16/10]"
         style={{
-          background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
+          background: d.hasHero
+            ? undefined
+            : `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
         }}
       >
-        <div className="absolute inset-0 bg-black/10 group-hover:bg-black/0 transition-colors" />
+        {d.hasHero && (
+          <Image
+            src={`/destinations/${d.id}.png`}
+            alt={`${d.name}, ${d.country}`}
+            fill
+            sizes="(max-width: 768px) 100vw, 33vw"
+            className="object-cover"
+            priority
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-5 text-white">
           <div className="font-serif text-2xl leading-tight">{d.name}</div>
           <div className="text-sm opacity-90">
             {d.country} · {d.airport}
           </div>
-        </div>
-        <div className="absolute top-3 right-3 text-[10px] uppercase tracking-widest text-white/70 bg-black/25 px-2 py-1 rounded-full backdrop-blur-sm">
-          AI hero coming
         </div>
       </div>
 

@@ -46,7 +46,9 @@ export interface DestinationSeed {
     typicalDurationHours: number;
     typicalStops: number;
   };
-  gradient: [string, string]; // hero placeholder background until Gemini fills it
+  gradient: [string, string]; // fallback if no hero PNG exists
+  /** True when a pre-generated Gemini hero exists at /destinations/{id}.png */
+  hasHero: boolean;
 }
 
 export interface DestinationCard extends DestinationSeed {
@@ -132,6 +134,7 @@ const SEEDS: DestinationSeed[] = [
       typicalStops: 1,
     },
     gradient: ["#f0a800", "#c93b1e"],
+    hasHero: true,
   },
   {
     id: "prague",
@@ -179,6 +182,7 @@ const SEEDS: DestinationSeed[] = [
       typicalStops: 0,
     },
     gradient: ["#8fa9c0", "#3a4a5a"],
+    hasHero: true,
   },
   {
     id: "south_italy",
@@ -226,6 +230,7 @@ const SEEDS: DestinationSeed[] = [
       typicalStops: 0,
     },
     gradient: ["#e6c9a1", "#5b7a68"],
+    hasHero: true,
   },
 ];
 

@@ -5,6 +5,7 @@ import { Header } from "@/components/header";
 import { AddItemForm } from "./add-item-form";
 import { ItineraryItemRow } from "./item-row";
 import { AIDraftButton } from "./ai-draft-button";
+import { CalendarExportButton } from "@/components/calendar-export-button";
 
 type Slot = "morning" | "afternoon" | "evening" | "any";
 
@@ -82,19 +83,22 @@ export default async function PlanPage({
           </Link>
         </div>
 
-        <div className="mb-6">
-          <div className="text-xs uppercase tracking-widest text-[color:var(--color-muted)] mb-2">
-            Day plan
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <div className="text-xs uppercase tracking-widest text-[color:var(--color-muted)] mb-2">
+              Day plan
+            </div>
+            <h1 className="font-serif text-3xl">
+              {trip.destination ?? trip.name} · {totalDays} day
+              {totalDays === 1 ? "" : "s"}
+            </h1>
+            {trip.start_date && trip.end_date && (
+              <p className="text-sm text-[color:var(--color-muted)] mt-1">
+                {trip.start_date} → {trip.end_date}
+              </p>
+            )}
           </div>
-          <h1 className="font-serif text-3xl">
-            {trip.destination ?? trip.name} · {totalDays} day
-            {totalDays === 1 ? "" : "s"}
-          </h1>
-          {trip.start_date && trip.end_date && (
-            <p className="text-sm text-[color:var(--color-muted)] mt-1">
-              {trip.start_date} → {trip.end_date}
-            </p>
-          )}
+          <CalendarExportButton tripId={trip.id} />
         </div>
 
         {migrationMissing && (

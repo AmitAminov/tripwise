@@ -39,6 +39,13 @@ next-env.d.ts
 supabase/.branches
 supabase/.temp
 
+# python bytecode
+__pycache__/
+*.py[cod]
+*.egg-info/
+python-services/*/venv/
+python-services/*/.venv/
+
 # editor
 .vscode/
 .idea/

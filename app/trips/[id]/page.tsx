@@ -6,12 +6,12 @@ import { InvitePanel } from "./invite-panel";
 import { formatDateRange } from "@/lib/format";
 
 const V2_TABS = [
-  { slug: "flights", label: "Flights", note: "search + save" },
-  { slug: "hotels", label: "Hotels", note: "estimates + deep links" },
-  { slug: "attractions", label: "Attractions", note: "Google Places" },
-  { slug: "restaurants", label: "Restaurants", note: "Google Places" },
-  { slug: "plan", label: "Day plan", note: "AI-generated draft" },
-  { slug: "decisions", label: "Decisions", note: "the reveal mechanic" },
+  { slug: "flights", label: "Flights", note: "real prices via fast-flights", ready: true },
+  { slug: "hotels", label: "Hotels", note: "estimates + deep links", ready: false },
+  { slug: "attractions", label: "Attractions", note: "Google Places", ready: false },
+  { slug: "restaurants", label: "Restaurants", note: "Google Places", ready: false },
+  { slug: "plan", label: "Day plan", note: "AI-generated draft", ready: false },
+  { slug: "decisions", label: "Decisions", note: "the reveal mechanic", ready: false },
 ] as const;
 
 export default async function TripDetailPage({
@@ -121,19 +121,36 @@ export default async function TripDetailPage({
             Trip surfaces
           </h2>
           <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {V2_TABS.map((tab) => (
-              <li key={tab.slug}>
-                <div className="card p-4 h-full opacity-60">
-                  <div className="font-medium mb-1">{tab.label}</div>
-                  <div className="text-xs text-[color:var(--color-muted)]">
-                    {tab.note}
+            {V2_TABS.map((tab) =>
+              tab.ready ? (
+                <li key={tab.slug}>
+                  <Link
+                    href={`/trips/${trip.id}/${tab.slug}`}
+                    className="card block p-4 h-full"
+                  >
+                    <div className="font-medium mb-1">{tab.label}</div>
+                    <div className="text-xs text-[color:var(--color-muted)]">
+                      {tab.note}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-widest text-[color:var(--color-accent)] mt-3">
+                      Ready →
+                    </div>
+                  </Link>
+                </li>
+              ) : (
+                <li key={tab.slug}>
+                  <div className="card p-4 h-full opacity-60">
+                    <div className="font-medium mb-1">{tab.label}</div>
+                    <div className="text-xs text-[color:var(--color-muted)]">
+                      {tab.note}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-widest text-[color:var(--color-highlight)] mt-3">
+                      Coming soon
+                    </div>
                   </div>
-                  <div className="text-[10px] uppercase tracking-widest text-[color:var(--color-highlight)] mt-3">
-                    Coming soon
-                  </div>
-                </div>
-              </li>
-            ))}
+                </li>
+              ),
+            )}
           </ul>
         </section>
       </main>

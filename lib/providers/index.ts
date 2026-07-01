@@ -1,13 +1,14 @@
 /**
  * Provider factories. Each returns the real implementation when the
- * corresponding API key is present in env, otherwise the mock.
+ * corresponding API key/service is present in env, otherwise the mock
+ * (or null if the surface can gracefully degrade).
  *
- * This lets every downstream page call `flightProvider().search(...)`
- * uniformly; the swap from mock → real happens at env-config time,
- * not at every call site.
+ * The swap from mock → real happens at env-config time, not at every
+ * call site.
  */
 
 import { mockFlightProvider } from "./flights/mock";
+import { fastFlightsProvider } from "./flights/fast-flights";
 import type {
   EventsProvider,
   FlightProvider,
@@ -18,34 +19,34 @@ import type {
 } from "./types";
 
 export function flightProvider(): FlightProvider {
-  // Real Duffel/Amadeus providers slot in here when DUFFEL_API_KEY /
-  // AMADEUS_API_KEY are present. Until then, mock keeps the UI honest
-  // and demoable.
+  // If FAST_FLIGHTS_BASE_URL is set, prefer the real scraper-backed
+  // service. Falls through to mock on any transport error at call time.
+  if (process.env.FAST_FLIGHTS_BASE_URL) {
+    return fastFlightsProvider;
+  }
   return mockFlightProvider;
 }
 
 export function placesProvider(): PlacesProvider | null {
-  // Google Places wires up when GOOGLE_PLACES_API_KEY is present.
+  // Google Places wires up when GOOGLE_MAPS_API_KEY is present and
+  // the "Places API (New)" is enabled on the project. Wired in a
+  // follow-up iteration; returning null here means callers can render
+  // "provider not configured" and keep the page usable.
   return null;
 }
 
 export function eventsProvider(): EventsProvider | null {
-  // Ticketmaster / PredictHQ.
   return null;
 }
 
 export function hotelProvider(): HotelProvider | null {
-  // LiteAPI / RateHawk. Until then, use the seeded estimates baked
-  // into data/destinations.ts.
   return null;
 }
 
 export function imageProvider(): ImageProvider | null {
-  // Gemini Nano Banana.
   return null;
 }
 
 export function weatherProvider(): WeatherProvider | null {
-  // Open-Meteo (free, no key). Wire on demand.
   return null;
 }

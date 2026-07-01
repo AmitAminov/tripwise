@@ -1,17 +1,208 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg: #0b0b0d;
-  --color-fg: #f5f5f5;
-  --color-muted: #8a8a8e;
-  --color-accent: #ff7b3c;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Warm neutrals — travel-magazine backdrop */
+  --color-bg: #faf7f2;
+  --color-surface: #ffffff;
+  --color-surface-2: #f2ede4;
+
+  /* Deep, editorial text */
+  --color-fg: #1a2332;
+  --color-fg-2: #3a4a5a;
+  --color-muted: #6b6157;
+  --color-subtle: #a19787;
+
+  /* Accents */
+  --color-primary: #1e3a5f;       /* deep navy */
+  --color-primary-hover: #172d4a;
+  --color-accent: #2d5f4e;         /* deep green */
+  --color-accent-hover: #234a3e;
+  --color-highlight: #c9a961;      /* sand/gold */
+
+  /* Borders + rules */
+  --color-line: #e5dfd4;
+  --color-line-2: #d3ccbf;
+
+  /* Semantic */
+  --color-success: #2d5f4e;
+  --color-warn: #b8791f;
+  --color-danger: #9b2c2c;
+
+  /* Typography */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  --font-serif: var(--font-fraunces), ui-serif, Georgia, Cambria,
+    "Times New Roman", serif;
+
+  /* Rhythm */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+
+  --shadow-card: 0 1px 2px rgba(26, 35, 50, 0.04),
+    0 4px 12px rgba(26, 35, 50, 0.06);
+  --shadow-hover: 0 2px 4px rgba(26, 35, 50, 0.06),
+    0 8px 24px rgba(26, 35, 50, 0.08);
 }
 
-html, body {
+html,
+body {
   background: var(--color-bg);
   color: var(--color-fg);
   font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
 }
 
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Editorial headings */
+.font-serif,
+h1.serif,
+h2.serif,
+h3.serif {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+/* Card baseline */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+.card:hover {
+  box-shadow: var(--shadow-hover);
+  border-color: var(--color-line-2);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.125rem;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  font-size: 0.9375rem;
+  transition: background-color 120ms ease, color 120ms ease,
+    border-color 120ms ease;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: var(--color-primary-hover);
+}
+.btn-accent {
+  background: var(--color-accent);
+  color: #fff;
+}
+.btn-accent:hover {
+  background: var(--color-accent-hover);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--color-fg);
+  border-color: var(--color-line);
+}
+.btn-ghost:hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-line-2);
+}
+.btn-link {
+  background: transparent;
+  color: var(--color-primary);
+  padding: 0;
+}
+.btn-link:hover {
+  color: var(--color-primary-hover);
+  text-decoration: underline;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Inputs */
+.field {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  font-size: 0.9375rem;
+  color: var(--color-fg);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.field:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12);
+}
+
+.field-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-fg-2);
+  margin-bottom: 0.375rem;
+}
+
+/* Chips (for interest tags, filters) */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  font-size: 0.8125rem;
+  color: var(--color-fg-2);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.chip:hover {
+  border-color: var(--color-line-2);
+  background: var(--color-surface-2);
+}
+.chip[data-selected="true"] {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+/* Status labels — for provider status per spec */
+.status-est {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+.status-live {
+  color: var(--color-success);
+}
+.status-cached {
+  color: var(--color-highlight);
+}
+.status-error {
+  color: var(--color-danger);
+}
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}

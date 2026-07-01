@@ -3,26 +3,46 @@ import { logout } from "@/app/login/actions";
 
 export function Header({ email }: { email?: string | null }) {
   return (
-    <header className="border-b border-white/10">
-      <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-        <Link href="/trips" className="text-lg font-semibold tracking-tight">
+    <header className="border-b border-[color:var(--color-line)] bg-[color:var(--color-surface)]/60 backdrop-blur">
+      <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <Link
+          href="/"
+          className="font-serif text-xl tracking-tight text-[color:var(--color-fg)]"
+        >
           TripWise
         </Link>
-        <div className="flex items-center gap-4">
+        <nav className="flex items-center gap-5 text-sm">
+          <Link
+            href="/compare"
+            className="text-[color:var(--color-fg-2)] hover:text-[color:var(--color-primary)] hidden sm:inline"
+          >
+            Compare
+          </Link>
           {email && (
-            <span className="text-sm text-[color:var(--color-muted)] hidden sm:inline">
-              {email}
-            </span>
-          )}
-          <form action={logout}>
-            <button
-              type="submit"
-              className="text-sm rounded-md border border-white/15 px-3 py-1.5 hover:bg-white/5"
+            <Link
+              href="/trips"
+              className="text-[color:var(--color-fg-2)] hover:text-[color:var(--color-primary)]"
             >
-              Sign out
-            </button>
-          </form>
-        </div>
+              My trips
+            </Link>
+          )}
+          {email ? (
+            <>
+              <span className="text-[color:var(--color-muted)] hidden md:inline">
+                {email}
+              </span>
+              <form action={logout}>
+                <button type="submit" className="btn btn-ghost">
+                  Sign out
+                </button>
+              </form>
+            </>
+          ) : (
+            <Link href="/login" className="btn btn-primary">
+              Sign in
+            </Link>
+          )}
+        </nav>
       </div>
     </header>
   );

@@ -26,20 +26,14 @@ export default async function JoinPage({
     redirect(`/trips/${tripId}`);
   }
 
-  // Fall through: show friendly error state.
   const message = error?.message ?? "This invite couldn't be used.";
 
   return (
-    <main className="min-h-screen flex items-center justify-center p-6">
-      <div className="w-full max-w-sm text-center">
-        <h1 className="text-2xl font-semibold tracking-tight mb-2">
-          Invite couldn&apos;t be used
-        </h1>
-        <p className="text-[color:var(--color-muted)] mb-6">{message}</p>
-        <Link
-          href="/trips"
-          className="inline-block rounded-md border border-white/15 px-4 py-2 text-sm hover:bg-white/5"
-        >
+    <main className="min-h-screen flex items-center justify-center p-6 bg-[color:var(--color-bg)]">
+      <div className="card p-8 w-full max-w-sm text-center">
+        <h1 className="font-serif text-2xl mb-2">Invite couldn&apos;t be used</h1>
+        <p className="text-[color:var(--color-fg-2)] mb-6">{message}</p>
+        <Link href="/trips" className="btn btn-primary inline-flex">
           Go to your trips
         </Link>
       </div>

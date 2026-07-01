@@ -3,23 +3,15 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { InvitePanel } from "./invite-panel";
-
-function formatDateRange(
-  start: string | null,
-  end: string | null,
-): string | null {
-  if (!start && !end) return null;
-  if (start && end) return `${start} → ${end}`;
-  return start ?? end ?? null;
-}
+import { formatDateRange } from "@/lib/format";
 
 const V2_TABS = [
-  { slug: "flights", label: "Flights" },
-  { slug: "hotels", label: "Hotels" },
-  { slug: "attractions", label: "Attractions" },
-  { slug: "restaurants", label: "Restaurants" },
-  { slug: "plan", label: "Day plan" },
-  { slug: "decisions", label: "Decisions" },
+  { slug: "flights", label: "Flights", note: "search + save" },
+  { slug: "hotels", label: "Hotels", note: "estimates + deep links" },
+  { slug: "attractions", label: "Attractions", note: "Google Places" },
+  { slug: "restaurants", label: "Restaurants", note: "Google Places" },
+  { slug: "plan", label: "Day plan", note: "AI-generated draft" },
+  { slug: "decisions", label: "Decisions", note: "the reveal mechanic" },
 ] as const;
 
 export default async function TripDetailPage({
@@ -68,18 +60,16 @@ export default async function TripDetailPage({
         <div className="mb-4">
           <Link
             href="/trips"
-            className="text-sm text-[color:var(--color-muted)] hover:underline"
+            className="text-sm text-[color:var(--color-muted)] hover:text-[color:var(--color-primary)]"
           >
             ← Back to trips
           </Link>
         </div>
 
         <div className="mb-8">
-          <h1 className="text-3xl font-semibold tracking-tight">
-            {trip.name}
-          </h1>
+          <h1 className="font-serif text-4xl">{trip.name}</h1>
           {trip.destination && (
-            <p className="text-[color:var(--color-muted)] mt-1">
+            <p className="text-lg text-[color:var(--color-fg-2)] mt-1">
               {trip.destination}
             </p>
           )}
@@ -91,25 +81,21 @@ export default async function TripDetailPage({
         </div>
 
         <section className="mb-8">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-[color:var(--color-muted)] mb-3">
+          <h2 className="text-xs font-medium uppercase tracking-widest text-[color:var(--color-muted)] mb-3">
             Members ({members?.length ?? 0})
           </h2>
           <ul className="flex flex-wrap gap-2">
             {members?.map((m) => {
-              // Supabase returns joined table as an object when using !inner
               const profile = Array.isArray(m.profiles)
                 ? m.profiles[0]
                 : m.profiles;
               const name = profile?.display_name ?? "member";
               const self = m.user_id === user.id;
               return (
-                <li
-                  key={m.user_id}
-                  className="rounded-full border border-white/15 px-3 py-1 text-sm"
-                >
+                <li key={m.user_id} className="chip">
                   {name}
                   {self && (
-                    <span className="text-[color:var(--color-muted)] ml-1">
+                    <span className="text-[color:var(--color-muted)]">
                       (you)
                     </span>
                   )}
@@ -120,7 +106,7 @@ export default async function TripDetailPage({
         </section>
 
         <section className="mb-8">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-[color:var(--color-muted)] mb-3">
+          <h2 className="text-xs font-medium uppercase tracking-widest text-[color:var(--color-muted)] mb-3">
             Invite
           </h2>
           <InvitePanel
@@ -131,15 +117,18 @@ export default async function TripDetailPage({
         </section>
 
         <section>
-          <h2 className="text-sm font-medium uppercase tracking-wider text-[color:var(--color-muted)] mb-3">
+          <h2 className="text-xs font-medium uppercase tracking-widest text-[color:var(--color-muted)] mb-3">
             Trip surfaces
           </h2>
           <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {V2_TABS.map((tab) => (
               <li key={tab.slug}>
-                <div className="rounded-lg border border-white/10 p-4 text-sm">
+                <div className="card p-4 h-full opacity-60">
                   <div className="font-medium mb-1">{tab.label}</div>
-                  <div className="text-[color:var(--color-muted)] text-xs">
+                  <div className="text-xs text-[color:var(--color-muted)]">
+                    {tab.note}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-widest text-[color:var(--color-highlight)] mt-3">
                     Coming soon
                   </div>
                 </div>

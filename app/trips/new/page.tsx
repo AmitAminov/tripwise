@@ -18,14 +18,12 @@ export default async function NewTripPage() {
         <div className="mb-4">
           <Link
             href="/trips"
-            className="text-sm text-[color:var(--color-muted)] hover:underline"
+            className="text-sm text-[color:var(--color-muted)] hover:text-[color:var(--color-primary)]"
           >
             ← Back to trips
           </Link>
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight mb-6">
-          New trip
-        </h1>
+        <h1 className="font-serif text-3xl mb-6">New trip</h1>
         <NewTripForm />
       </main>
     </>

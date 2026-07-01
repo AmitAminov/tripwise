@@ -2,26 +2,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
-import { getDestination, DESTINATIONS } from "@/data/destinations";
 import { placesProvider } from "@/lib/providers";
+import { resolveDestination } from "@/lib/destination-coords";
 import { MapView, type MapPin } from "./map-view";
-
-function resolveCoords(
-  destination: string | null,
-): { name: string; lat: number; lng: number } | null {
-  if (!destination) return null;
-  const lower = destination.toLowerCase();
-  for (const d of DESTINATIONS) {
-    if (
-      lower.includes(d.name.toLowerCase()) ||
-      (d.id === "south_italy" &&
-        /naples|napoli|amalfi|positano|puglia/i.test(lower))
-    ) {
-      return { name: d.name, lat: d.coords.lat, lng: d.coords.lng };
-    }
-  }
-  return null;
-}
 
 export default async function TripMapPage({
   params,
@@ -50,7 +33,10 @@ export default async function TripMapPage({
     )
     .eq("trip_id", id);
 
-  const center = resolveCoords(trip.destination);
+  const resolved = await resolveDestination(trip.destination);
+  const center = resolved
+    ? { name: resolved.name, lat: resolved.coords.lat, lng: resolved.coords.lng }
+    : null;
 
   // Enrich pins: for items without coords, look up nearby Places.
   const provider = placesProvider();
@@ -132,8 +118,8 @@ export default async function TripMapPage({
               <span className="status-dot" /> Destination coordinates unknown
             </div>
             <p className="text-sm text-[color:var(--color-fg-2)]">
-              Set the trip destination to Bangkok, Prague, or South Italy.
-              Geocoding for arbitrary cities lands next.
+              Couldn&apos;t geocode <em>{trip.destination}</em>. Try a
+              more specific destination string.
             </p>
           </div>
         )}

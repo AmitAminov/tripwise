@@ -4,38 +4,11 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { placesProvider } from "@/lib/providers";
-import { getDestination } from "@/data/destinations";
+import { resolveDestination } from "@/lib/destination-coords";
 
 function firstStr(v: string | string[] | undefined): string | undefined {
   if (Array.isArray(v)) return v[0];
   return v;
-}
-
-/** Best-effort mapping from trip.destination text → known destination coords */
-function resolveCoords(
-  destinationText: string | null,
-): { name: string; lat: number; lng: number } | null {
-  if (!destinationText) return null;
-  const lower = destinationText.toLowerCase();
-  if (lower.includes("bangkok") || lower.includes("thailand")) {
-    const d = getDestination("bangkok")!;
-    return { name: d.name, lat: d.coords.lat, lng: d.coords.lng };
-  }
-  if (lower.includes("prague") || lower.includes("czech")) {
-    const d = getDestination("prague")!;
-    return { name: d.name, lat: d.coords.lat, lng: d.coords.lng };
-  }
-  if (
-    lower.includes("naples") ||
-    lower.includes("napoli") ||
-    lower.includes("italy") ||
-    lower.includes("amalfi") ||
-    lower.includes("puglia")
-  ) {
-    const d = getDestination("south_italy")!;
-    return { name: d.name, lat: d.coords.lat, lng: d.coords.lng };
-  }
-  return null;
 }
 
 export default async function AttractionsPage({
@@ -66,7 +39,10 @@ export default async function AttractionsPage({
     | "restaurants"
     | "cafes"
     | "bars");
-  const coords = resolveCoords(trip.destination);
+  const resolved = await resolveDestination(trip.destination);
+  const coords = resolved
+    ? { name: resolved.name, lat: resolved.coords.lat, lng: resolved.coords.lng }
+    : null;
   const provider = placesProvider();
 
   let result: Awaited<
@@ -137,10 +113,10 @@ export default async function AttractionsPage({
             title="Destination coordinates unknown"
             body={
               <>
-                Set the trip destination to one of{" "}
-                <em>Bangkok</em>, <em>Prague</em>, or <em>South Italy</em> for
-                now. Geocoding (turn any city name into coords) lands next
-                iteration.
+                Couldn&apos;t resolve <em>{trip.destination}</em> via
+                seed data or Google Geocoding. Try a more specific name
+                (e.g. &quot;Prague, Czech Republic&quot;) or check that
+                the Geocoding API is enabled on your Cloud project.
               </>
             }
           />

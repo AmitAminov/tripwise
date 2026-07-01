@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { generateText } from "@/lib/ai/gemini";
 import { placesProvider } from "@/lib/providers";
-import { getDestination, DESTINATIONS } from "@/data/destinations";
+import { resolveDestination } from "@/lib/destination-coords";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -92,21 +92,10 @@ export async function draftDayPlan(
 
   const destination = trip.destination ?? trip.name;
 
-  // Resolve destination coordinates for the Places search.
-  // Best-effort match against our seed destinations.
-  let coords: { lat: number; lng: number } | null = null;
-  const destLower = (destination ?? "").toLowerCase();
-  for (const d of DESTINATIONS) {
-    if (
-      destLower.includes(d.name.toLowerCase()) ||
-      destLower.includes(d.country.toLowerCase()) ||
-      (d.id === "south_italy" &&
-        /naples|napoli|amalfi|positano|puglia/i.test(destLower))
-    ) {
-      coords = d.coords;
-      break;
-    }
-  }
+  // Resolve destination coordinates — seed data first, then Geocoding
+  // for any other city.
+  const resolved = await resolveDestination(destination);
+  const coords = resolved?.coords ?? null;
 
   // Pull real Places data (top attractions + restaurants) to ground the model.
   const provider = placesProvider();

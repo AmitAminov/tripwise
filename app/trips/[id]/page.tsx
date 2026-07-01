@@ -6,12 +6,15 @@ import { InvitePanel } from "./invite-panel";
 import { formatDateRange } from "@/lib/format";
 
 const V2_TABS = [
-  { slug: "flights", label: "Flights", note: "real prices via fast-flights", ready: true },
+  { slug: "flights", label: "Flights", note: "real prices, converted to USD", ready: true },
   { slug: "attractions", label: "Attractions", note: "Google Places (New)", ready: true },
   { slug: "attractions?kind=restaurants", label: "Restaurants", note: "Google Places (New)", ready: true },
+  { slug: "hotels", label: "Hotels", note: "estimates + deep links", ready: true },
   { slug: "plan", label: "Day plan", note: "day-by-day itinerary", ready: true },
+  { slug: "map", label: "Map", note: "pins + day filter", ready: true },
+  { slug: "pricing", label: "Pricing dashboard", note: "aggregated estimates", ready: true },
+  { slug: "events", label: "Events", note: "curated + Ticketmaster (opt.)", ready: true },
   { slug: "decisions", label: "Decisions", note: "the reveal mechanic", ready: true },
-  { slug: "hotels", label: "Hotels", note: "estimates + deep links", ready: false },
 ] as const;
 
 export default async function TripDetailPage({

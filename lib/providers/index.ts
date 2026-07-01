@@ -11,6 +11,8 @@ import { mockFlightProvider } from "./flights/mock";
 import { fastFlightsProvider } from "./flights/fast-flights";
 import { googlePlacesProvider } from "./places/google";
 import { geminiImageProvider } from "./images/gemini";
+import { deepLinkHotelProvider } from "./hotels/deep-links";
+import { curatedEventsProvider } from "./events/curated";
 import type {
   EventsProvider,
   FlightProvider,
@@ -35,11 +37,14 @@ export function placesProvider(): PlacesProvider | null {
 }
 
 export function eventsProvider(): EventsProvider | null {
-  return null;
+  // Curated seed always available; Ticketmaster/PredictHQ layer on top
+  // when TICKETMASTER_API_KEY / PREDICTHQ_API_KEY are present.
+  return curatedEventsProvider;
 }
 
 export function hotelProvider(): HotelProvider | null {
-  return null;
+  // Always available — pure estimates + deep-link construction.
+  return deepLinkHotelProvider;
 }
 
 export function imageProvider(): ImageProvider | null {

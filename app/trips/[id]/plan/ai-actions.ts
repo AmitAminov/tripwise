@@ -2,6 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { generateText } from "@/lib/ai/gemini";
+import { placesProvider } from "@/lib/providers";
+import { getDestination, DESTINATIONS } from "@/data/destinations";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -89,6 +91,51 @@ export async function draftDayPlan(
     : `Day ${dayIndex + 1} of trip`;
 
   const destination = trip.destination ?? trip.name;
+
+  // Resolve destination coordinates for the Places search.
+  // Best-effort match against our seed destinations.
+  let coords: { lat: number; lng: number } | null = null;
+  const destLower = (destination ?? "").toLowerCase();
+  for (const d of DESTINATIONS) {
+    if (
+      destLower.includes(d.name.toLowerCase()) ||
+      destLower.includes(d.country.toLowerCase()) ||
+      (d.id === "south_italy" &&
+        /naples|napoli|amalfi|positano|puglia/i.test(destLower))
+    ) {
+      coords = d.coords;
+      break;
+    }
+  }
+
+  // Pull real Places data (top attractions + restaurants) to ground the model.
+  const provider = placesProvider();
+  const placeLines: string[] = [];
+  if (provider && coords) {
+    const [attractions, restaurants] = await Promise.all([
+      provider.search({
+        center: coords,
+        kind: "attractions",
+        radiusMeters: 5000,
+        limit: 10,
+      }),
+      provider.search({
+        center: coords,
+        kind: "restaurants",
+        radiusMeters: 5000,
+        limit: 8,
+      }),
+    ]);
+    for (const p of attractions.data ?? []) {
+      const rating = p.rating ? ` [${p.rating.toFixed(1)}★]` : "";
+      placeLines.push(`- ${p.name}${rating} (attraction)`);
+    }
+    for (const p of restaurants.data ?? []) {
+      const rating = p.rating ? ` [${p.rating.toFixed(1)}★]` : "";
+      placeLines.push(`- ${p.name}${rating} (restaurant)`);
+    }
+  }
+
   const existingLines = (existingDay ?? [])
     .map((e) => `- ${e.slot}: ${e.title}`)
     .join("\n");
@@ -106,6 +153,7 @@ export async function draftDayPlan(
 Rules:
 - 3 to 4 items total, distributed across morning, afternoon, and evening
 - Each item is one specific concrete thing (not "explore old town" — pick a specific attraction, restaurant, walk, or moment)
+- ${placeLines.length > 0 ? "STRONGLY prefer places from the 'Real places nearby' list below. Use their exact names." : "Use well-known specific places."}
 - Consider walking distance and jet-lag on the first day
 - Autumn 2026 weather-appropriate
 - Reflect that the travelers are a couple, not a group tour
@@ -114,6 +162,9 @@ Rules:
     decidedLines ? " (listed below)" : ""
   }
 - Notes are one short sentence — a booking hint, a timing tip, or why this over the obvious pick
+
+Real places nearby (rated on Google Maps — prefer these):
+${placeLines.join("\n") || "(none — Places API not available; use general knowledge)"}
 
 Existing items on this day (skip these):
 ${existingLines || "(none yet)"}

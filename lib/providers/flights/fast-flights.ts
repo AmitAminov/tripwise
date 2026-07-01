@@ -16,6 +16,7 @@ import type {
   FlightSearchQuery,
   ProviderResult,
 } from "@/lib/providers/types";
+import { toUSDMany } from "@/lib/fx";
 
 interface UpstreamOffer {
   id: string;
@@ -91,10 +92,18 @@ export const fastFlightsProvider: FlightProvider = {
 
       const body = (await res.json()) as UpstreamResponse;
 
-      const offers: FlightOffer[] = body.offers.map((o) => ({
+      // Batch-convert every offer's local-currency price to USD in one FX lookup.
+      const usdPrices = await toUSDMany(
+        body.offers.map((o) => ({
+          amount: o.total_price_usd,
+          currency: o.currency,
+        })),
+      );
+
+      const offers: FlightOffer[] = body.offers.map((o, i) => ({
         id: o.id,
-        totalPriceUSD: o.total_price_usd, // currency conversion is a TODO
-        currency: o.currency,
+        totalPriceUSD: Math.round(usdPrices[i] ?? o.total_price_usd),
+        currency: "USD",
         totalDurationMinutes: o.total_duration_minutes,
         layoverCount: o.layover_count,
         carriers: o.carriers,
@@ -112,6 +121,9 @@ export const fastFlightsProvider: FlightProvider = {
         source: "fast-flights",
         checkedAt: o.checked_at,
       }));
+
+      // Re-sort by USD price now that everything is normalized.
+      offers.sort((a, b) => a.totalPriceUSD - b.totalPriceUSD);
 
       return {
         data: offers,

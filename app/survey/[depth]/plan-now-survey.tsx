@@ -18,6 +18,12 @@ const PACES = [
   { value: "packed", label: "Packed", hint: "See everything" },
 ] as const;
 
+// Selected-state utility — used everywhere the same visual language applies.
+const selectedCard =
+  "bg-[color:var(--color-primary)] text-white border-[color:var(--color-primary)] shadow-sm";
+const unselectedCard =
+  "bg-[color:var(--color-surface)] text-[color:var(--color-fg)] border-[color:var(--color-line)] hover:border-[color:var(--color-line-2)]";
+
 export function PlanNowSurvey() {
   const [candidates, setCandidates] = useState<string[]>(
     DESTINATIONS.map((d) => d.id),
@@ -36,7 +42,6 @@ export function PlanNowSurvey() {
   }
 
   async function onSubmit(formData: FormData) {
-    // Merge current chip selections into the form payload.
     candidates.forEach((c) => formData.append("candidates", c));
     interests.forEach((i) => formData.append("interests", i));
     formData.set("comfort", comfort);
@@ -59,14 +64,18 @@ export function PlanNowSurvey() {
                 key={d.id}
                 type="button"
                 onClick={() => toggle(candidates, setCandidates, d.id)}
-                className={`text-left card p-3 transition-colors ${
-                  on
-                    ? "ring-2 ring-[color:var(--color-primary)] border-[color:var(--color-primary)]"
-                    : ""
+                className={`text-left rounded-[var(--radius)] p-3 border transition-all ${
+                  on ? selectedCard : unselectedCard
                 }`}
+                aria-pressed={on}
               >
-                <div className="font-medium text-sm">{d.name}</div>
-                <div className="text-xs text-[color:var(--color-muted)]">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium text-sm">{d.name}</div>
+                  <SelectionCheck on={on} />
+                </div>
+                <div
+                  className={`text-xs ${on ? "text-white/70" : "text-[color:var(--color-muted)]"}`}
+                >
                   {d.country}
                 </div>
               </button>
@@ -74,7 +83,7 @@ export function PlanNowSurvey() {
           })}
         </div>
         <p className="text-xs text-[color:var(--color-muted)] mt-2">
-          Add or remove any. Score against real live prices when APIs land.
+          Deselect any you don&apos;t want ranked.
         </p>
       </fieldset>
 
@@ -156,37 +165,48 @@ export function PlanNowSurvey() {
           className="field mb-3"
         />
         <div className="flex flex-wrap gap-2">
-          {COMFORT_LEVELS.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              onClick={() => setComfort(c.value)}
-              className="chip"
-              data-selected={comfort === c.value}
-            >
-              {c.label}
-            </button>
-          ))}
+          {COMFORT_LEVELS.map((c) => {
+            const on = comfort === c.value;
+            return (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => setComfort(c.value)}
+                className={`px-4 py-1.5 rounded-full text-sm border transition-all ${
+                  on ? selectedCard : unselectedCard
+                }`}
+                aria-pressed={on}
+              >
+                {c.label}
+              </button>
+            );
+          })}
         </div>
       </fieldset>
 
       {/* Vibe */}
       <fieldset>
         <legend className="field-label mb-2">
-          What are you into? <span className="text-[color:var(--color-muted)]">(pick a few)</span>
+          What are you into?{" "}
+          <span className="text-[color:var(--color-muted)]">(pick a few)</span>
         </legend>
         <div className="flex flex-wrap gap-2">
-          {INTEREST_OPTIONS.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => toggle(interests, setInterests, tag)}
-              className="chip capitalize"
-              data-selected={interests.includes(tag)}
-            >
-              {tag.replace(/_/g, " ")}
-            </button>
-          ))}
+          {INTEREST_OPTIONS.map((tag) => {
+            const on = interests.includes(tag);
+            return (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => toggle(interests, setInterests, tag)}
+                className={`px-3 py-1 rounded-full text-sm border capitalize transition-all ${
+                  on ? selectedCard : unselectedCard
+                }`}
+                aria-pressed={on}
+              >
+                {tag.replace(/_/g, " ")}
+              </button>
+            );
+          })}
         </div>
       </fieldset>
 
@@ -194,23 +214,32 @@ export function PlanNowSurvey() {
       <fieldset>
         <legend className="field-label mb-2">Pace</legend>
         <div className="grid grid-cols-3 gap-2">
-          {PACES.map((p) => (
-            <button
-              key={p.value}
-              type="button"
-              onClick={() => setPace(p.value)}
-              className={`card p-3 text-left transition-colors ${
-                pace === p.value
-                  ? "ring-2 ring-[color:var(--color-primary)] border-[color:var(--color-primary)]"
-                  : ""
-              }`}
-            >
-              <div className="text-sm font-medium">{p.label}</div>
-              <div className="text-xs text-[color:var(--color-muted)]">
-                {p.hint}
-              </div>
-            </button>
-          ))}
+          {PACES.map((p) => {
+            const on = pace === p.value;
+            return (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => setPace(p.value)}
+                className={`text-left rounded-[var(--radius)] p-3 border transition-all ${
+                  on ? selectedCard : unselectedCard
+                }`}
+                aria-pressed={on}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{p.label}</span>
+                  <SelectionCheck on={on} />
+                </div>
+                <div
+                  className={`text-xs mt-1 ${
+                    on ? "text-white/70" : "text-[color:var(--color-muted)]"
+                  }`}
+                >
+                  {p.hint}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </fieldset>
 
@@ -224,5 +253,20 @@ export function PlanNowSurvey() {
         </button>
       </div>
     </form>
+  );
+}
+
+function SelectionCheck({ on }: { on: boolean }) {
+  return (
+    <span
+      className={`ml-2 shrink-0 w-4 h-4 rounded-full flex items-center justify-center text-[10px] ${
+        on
+          ? "bg-white text-[color:var(--color-primary)]"
+          : "border border-[color:var(--color-line-2)] text-transparent"
+      }`}
+      aria-hidden
+    >
+      ✓
+    </span>
   );
 }

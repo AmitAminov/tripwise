@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { PlanNowSurvey } from "./plan-now-survey";
+import { IntermediateSurvey } from "./intermediate-survey";
 import type { PlanningDepth } from "@/lib/types/trip-intent";
 
 const DEPTHS: readonly PlanningDepth[] = [
@@ -70,41 +71,8 @@ export default async function SurveyPage({
         </div>
 
         {depth === "plan_now" && <PlanNowSurvey />}
-
-        {(depth === "intermediate" || depth === "deep_research") && (
-          <div className="card p-6 text-[color:var(--color-fg-2)]">
-            <p className="mb-3">
-              <strong>{meta.title}</strong> survey rolls out in the next few
-              iterations. It adds:
-            </p>
-            <ul className="space-y-1 text-sm list-disc list-inside">
-              {depth === "intermediate" && (
-                <>
-                  <li>Origin airport preferences + baggage</li>
-                  <li>Lodging preferences (type, area, amenities)</li>
-                  <li>Dietary constraints + mobility</li>
-                  <li>Interest sub-selection with weights</li>
-                  <li>Live flight/events search on submit</li>
-                </>
-              )}
-              {depth === "deep_research" && (
-                <>
-                  <li>Everything from Intermediate, plus:</li>
-                  <li>Visa + safety tolerance calibration</li>
-                  <li>Multi-destination + multi-leg logistics</li>
-                  <li>Alternative-date scanning for price windows</li>
-                  <li>Route optimization + area comparison</li>
-                  <li>Background research job with progress</li>
-                </>
-              )}
-            </ul>
-            <div className="mt-5">
-              <Link href="/survey/plan_now" className="btn btn-primary">
-                Use Plan Now for now →
-              </Link>
-            </div>
-          </div>
-        )}
+        {depth === "intermediate" && <IntermediateSurvey />}
+        {depth === "deep_research" && <IntermediateSurvey deep />}
       </main>
     </>
   );

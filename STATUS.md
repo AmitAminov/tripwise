@@ -21,12 +21,18 @@ _Live status board — what's shipped, what's queued, what needs your hand._
 | **Day plan with AI drafts** | ✅ | Gemini grounded on real Places; items geocoded on insert |
 | **Google Routes walking-time chips** | ✅ | Legs computed per day between consecutive items with coords |
 | Interactive Google Map | ✅ | Pins + day filter |
-| **Pricing dashboard** | ✅ | Aggregated flights + lodging + food + activities + events + transport + insurance + buffer |
-| **AI Visuals** | ✅ | Nano Banana mood board + trip poster, 6h cache, per-user rate cap |
+| **Pricing dashboard** | ✅ | Full spec formula: flights + lodging + activities + events + food + transport + **insurance** + **service_fees** + buffer |
+| **AI Visuals with Gemini→Places fallback** | ✅ | Nano Banana; on quota/error swaps to a Google Places photo of a nearby attraction |
 | **Decision arena (reveal mechanic)** | ✅ | RLS-enforced independent rating + delayed reveal |
 | **Save to arena** from flights / hotels / attractions | ✅ | One-click composite decision creation |
 | Calendar export | ✅ | GIS token flow |
 | Geocoding (any city) | ✅ | Google Geocoding API |
+| **Weather forecast** | ✅ | Open-Meteo (free, no key), 24h SWR, climatology beyond 16-day window |
+| **Visa lookup** | ✅ | Curated IATA-style matrix for common passport ↔ destination pairs |
+| **Ticketmaster events** | ✅ | Composite provider merges Ticketmaster + PredictHQ + curated with dedupe |
+| **Confirmed price transition** | ✅ | `/api/flights/revalidate` promotes saved offers `live_checked → confirmed` before booking |
+| **Deep Research background jobs** | ✅ | In-memory queue; POST enqueue → GET poll; per-destination weather + event counts |
+| **TripIntent-hash comparison cache** | ✅ | Ranked destinations cached by material-fields hash |
 
 ### Reliability & performance layers
 
@@ -44,8 +50,8 @@ _Live status board — what's shipped, what's queued, what needs your hand._
 
 | Layer | Status |
 |---|---|
-| **Vitest unit** | ✅ **47/47 passing**: scoring, FX, format, curated events, hotels, SWR cache |
-| **Playwright E2E scaffold** | ✅ Config + 5 smoke tests written. Run: `bunx playwright install chromium` then `bun run test:e2e` (with `bun run dev` in another terminal). |
+| **Vitest unit** | ✅ **54/54 passing**: scoring, FX, format, curated events, hotels, SWR cache, visa, intent-hash, deep-research queue |
+| **Playwright E2E scaffold** | ✅ Config + 5 smoke tests written. Run: `bunx playwright install chromium` then `bun run test:e2e` (with `bun run dev` in another terminal). Chrome debug-pipe issue known on some sandboxed Windows sessions — runs cleanly in a normal desktop shell. |
 | Coverage target | ~80% of `lib/` covered by unit tests; Vitest coverage command wired |
 
 ### Blocked / open
@@ -53,11 +59,10 @@ _Live status board — what's shipped, what's queued, what needs your hand._
 | Item | Blocker |
 |---|---|
 | `002_itinerary.sql` migration | Manual paste into Supabase SQL Editor (30 sec) — otherwise Day plan / AI drafts / Calendar export show a "migration not applied" banner |
-| Live event inventory | Optional Ticketmaster / PredictHQ key — curated seed works today |
-| Real hotel inventory (vs. deep links + estimates) | Optional LiteAPI or RateHawk |
-| Redis / durable cache | In-memory SWR is the current sub. Swap when scale demands. |
-| Deep Research true background worker | Currently sync. Redis + BullMQ would swap in. |
+| Redis / durable cache | In-memory SWR is the current sub. Same interface — swap when scale demands. |
+| Deep Research durable queue | In-memory job runner ships today; swap for BullMQ / Cloudflare Queues when multi-process required |
 | Bulk browser install for Playwright | ~120 MB one-time: `bunx playwright install chromium` |
+| Ticketmaster API key (optional) | Composite events already merges TM when `TICKETMASTER_API_KEY` is set; falls back to PredictHQ + curated when absent |
 
 ## The concrete test case (unchanged)
 

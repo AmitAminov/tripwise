@@ -106,20 +106,26 @@ export default async function PlanPage({
 
   // For each day, compute walking legs between consecutive items that
   // both have coords. In parallel across days so the page still renders
-  // even if Routes is temperamental.
+  // even if Routes is temperamental. Track per-day availability so we
+  // can surface "walking times unavailable" per spec's reliability rule.
   const legsByDay = new Map<number, RouteLeg[]>();
+  const routesUnavailableDays = new Set<number>();
   await Promise.all(
     Array.from({ length: totalDays }).map(async (_, dayIndex) => {
       const dayItems = items.filter((i) => i.day_index === dayIndex);
       const ordered = orderForDay(dayItems);
       const points = ordered
-        .filter(
-          (i) => i.coords_lat != null && i.coords_lng != null,
-        )
+        .filter((i) => i.coords_lat != null && i.coords_lng != null)
         .map((i) => ({ lat: i.coords_lat!, lng: i.coords_lng! }));
       if (points.length < 2) return;
       const legs = await computeDayLegs(points, "WALK");
-      if (legs && legs.length > 0) legsByDay.set(dayIndex, legs);
+      if (legs && legs.length > 0) {
+        legsByDay.set(dayIndex, legs);
+      } else {
+        // We had ≥2 geocoded items but Routes gave us nothing —
+        // note it so the UI can degrade gracefully.
+        routesUnavailableDays.add(dayIndex);
+      }
     }),
   );
 
@@ -208,6 +214,12 @@ export default async function PlanPage({
                       <div className="text-xs text-[color:var(--color-muted)] mt-1">
                         Walking between {dayLegs.length + 1} stops · ~
                         {dayTotalMinutes} min total
+                      </div>
+                    )}
+                    {routesUnavailableDays.has(dayIndex) && (
+                      <div className="text-xs text-[color:var(--color-warn)] mt-1">
+                        Walking times unavailable — Routes API didn&apos;t
+                        respond.
                       </div>
                     )}
                   </div>

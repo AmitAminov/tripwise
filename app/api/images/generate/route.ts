@@ -43,7 +43,7 @@ function cacheKey(prompt: string, purpose: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  let body: { prompt?: unknown; purpose?: unknown };
+  let body: { prompt?: unknown; purpose?: unknown; aspect?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -64,6 +64,11 @@ export async function POST(request: NextRequest) {
           | "trip_poster"
           | "attraction_fallback")
       : "destination_hero";
+  const aspect =
+    typeof body.aspect === "string" &&
+    ["16:9", "4:5", "1:1", "3:2"].includes(body.aspect)
+      ? (body.aspect as "16:9" | "4:5" | "1:1" | "3:2")
+      : "16:9";
 
   if (prompt.length < 10 || prompt.length > 2000) {
     return NextResponse.json(
@@ -87,7 +92,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const key = cacheKey(prompt, purpose);
+  const key = cacheKey(prompt, `${purpose}:${aspect}`);
   const cached = cache.get(key);
   if (cached && Date.now() - cached.storedAt < CACHE_TTL_MS) {
     return NextResponse.json({
@@ -108,7 +113,7 @@ export async function POST(request: NextRequest) {
 
   const result = await provider.generate({
     prompt,
-    aspect: "16:9",
+    aspect,
     purpose,
   });
 

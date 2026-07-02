@@ -84,6 +84,7 @@ export function VisualsGallery({
         body: JSON.stringify({
           prompt: slot.prompt,
           purpose: slot.purpose,
+          aspect: slot.aspect,
         }),
       });
       const body = (await res.json()) as {

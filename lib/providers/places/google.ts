@@ -21,8 +21,23 @@ import type {
   PlacesProvider,
   ProviderResult,
 } from "@/lib/providers/types";
+import { SWRCache } from "@/lib/swr-cache";
 
 const BASE = "https://places.googleapis.com/v1";
+
+// Places search / detail cache. Places metadata changes on the order of
+// hours (open hours can move, ratings drift); 1h fresh / 12h stale is
+// a reasonable middle-ground per spec's "cache Places details by place ID".
+const searchCache = new SWRCache<Place[]>({
+  freshMs: 60 * 60 * 1000,
+  staleMs: 12 * 60 * 60 * 1000,
+  maxEntries: 500,
+});
+const detailCache = new SWRCache<Place | null>({
+  freshMs: 60 * 60 * 1000,
+  staleMs: 12 * 60 * 60 * 1000,
+  maxEntries: 500,
+});
 
 // Category → included place types for Places API (New).
 // See https://developers.google.com/maps/documentation/places/web-service/place-types
@@ -137,11 +152,29 @@ async function callPlaces<T>(
   return { ok: true, data };
 }
 
+function searchKey(query: PlaceSearchQuery): string {
+  const lat = Math.round(query.center.lat * 1000) / 1000;
+  const lng = Math.round(query.center.lng * 1000) / 1000;
+  return `${query.kind}|${lat},${lng}|${query.radiusMeters ?? "def"}|${query.keyword ?? ""}|${query.limit ?? "def"}`;
+}
+
 export const googlePlacesProvider: PlacesProvider = {
   name: "google-places",
 
   async search(query): Promise<ProviderResult<Place[]>> {
     const now = new Date().toISOString();
+    const cacheKey = searchKey(query);
+
+    // Fast path: SWR hit within fresh window.
+    const preview = searchCache.peek(cacheKey);
+    if (preview && preview.status.status !== "miss") {
+      return {
+        data: preview.value,
+        status: preview.status.status === "fresh" ? "live_checked" : "cached",
+        source: "google-places",
+        checkedAt: now,
+      };
+    }
 
     // Prefer nearby when we have coords; text otherwise.
     const useNearby =
@@ -182,6 +215,7 @@ export const googlePlacesProvider: PlacesProvider = {
         .map((p) => normalize(p, query.kind))
         .filter((x): x is Place => x !== null);
 
+      searchCache.set(cacheKey, places);
       return {
         data: places,
         status: "live_checked",
@@ -226,6 +260,7 @@ export const googlePlacesProvider: PlacesProvider = {
       .map((p) => normalize(p, query.kind))
       .filter((x): x is Place => x !== null);
 
+    searchCache.set(cacheKey, places);
     return {
       data: places,
       status: "live_checked",
@@ -244,6 +279,16 @@ export const googlePlacesProvider: PlacesProvider = {
         source: "google-places",
         checkedAt: now,
         error: "GOOGLE_MAPS_API_KEY not set",
+      };
+    }
+
+    const preview = detailCache.peek(placeId);
+    if (preview && preview.value && preview.status.status !== "miss") {
+      return {
+        data: preview.value,
+        status: preview.status.status === "fresh" ? "live_checked" : "cached",
+        source: "google-places",
+        checkedAt: now,
       };
     }
 
@@ -278,6 +323,7 @@ export const googlePlacesProvider: PlacesProvider = {
         error: "Place missing coordinates",
       };
     }
+    detailCache.set(placeId, normalized);
     return {
       data: normalized,
       status: "live_checked",

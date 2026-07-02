@@ -19,8 +19,17 @@ import type {
   EventsProvider,
   ProviderResult,
 } from "@/lib/providers/types";
+import { SWRCache } from "@/lib/swr-cache";
 
 const BASE = "https://api.predicthq.com/v1";
+
+// Events change slowly — 6h fresh / 48h stale is a safe window.
+// Keyed by city + date window + categories.
+const eventsCache = new SWRCache<{ events: unknown[]; error?: string }>({
+  freshMs: 6 * 60 * 60 * 1000,
+  staleMs: 48 * 60 * 60 * 1000,
+  maxEntries: 400,
+});
 
 // Reasonable defaults for a couple trip: skip low-rank noise and
 // prefer culturally-significant + tourist-oriented events. Full
@@ -109,7 +118,12 @@ function normalize(raw: RawEvent): EventItem {
   };
 }
 
-async function fetchEvents(
+function eventsKey(q: EventSearchQuery): string {
+  const cats = [...(q.categories ?? [])].sort().join(",");
+  return `${q.city}|${q.from.slice(0, 10)}|${q.to.slice(0, 10)}|${cats}|${q.limit ?? "def"}`;
+}
+
+async function fetchEventsLive(
   q: EventSearchQuery,
 ): Promise<{ events: RawEvent[]; error?: string }> {
   const key = process.env.PREDICTHQ_API_KEY;
@@ -155,6 +169,23 @@ async function fetchEvents(
 
   const body = (await res.json()) as EventsResponse;
   return { events: body.results ?? [] };
+}
+
+async function fetchEvents(
+  q: EventSearchQuery,
+): Promise<{ events: RawEvent[]; error?: string }> {
+  const cacheKey = eventsKey(q);
+  const cached = await eventsCache.get(cacheKey, async () => {
+    const result = await fetchEventsLive(q);
+    return {
+      events: result.events as unknown[],
+      error: result.error,
+    };
+  });
+  return {
+    events: cached.value.events as RawEvent[],
+    error: cached.value.error,
+  };
 }
 
 export const predictHqEventsProvider: EventsProvider = {

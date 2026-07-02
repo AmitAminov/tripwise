@@ -42,17 +42,20 @@ export const compositeEventsProvider: EventsProvider = {
       ...(curated.data ?? []),
     ]);
 
-    const anyLive = phq.status === "live_checked";
+    // Only claim "live" when PredictHQ actually contributed real data.
+    // If PHQ errored OR returned zero, this is curated-only.
+    const phqContributed =
+      phq.status === "live_checked" &&
+      (phq.data?.length ?? 0) > 0;
+
     return {
       data: merged,
-      status: anyLive
-        ? "live_checked"
-        : phq.status === "error" && curated.data && curated.data.length > 0
-          ? "estimated"
-          : "estimated",
-      source: anyLive ? "predicthq+curated" : "curated",
+      status: phqContributed ? "live_checked" : "estimated",
+      source: phqContributed ? "predicthq+curated" : "curated",
       checkedAt: now,
-      error: !anyLive ? phq.error : undefined,
+      // Surface the PredictHQ error even when curated saves the render,
+      // so the UI can show a "Provider unavailable" chip per spec.
+      error: phq.status === "error" ? phq.error : undefined,
     };
   },
 };

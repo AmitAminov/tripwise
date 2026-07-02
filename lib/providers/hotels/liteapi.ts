@@ -22,8 +22,18 @@ import type {
   ProviderResult,
 } from "@/lib/providers/types";
 import { deepLinkHotelProvider } from "./deep-links";
+import { SWRCache } from "@/lib/swr-cache";
 
 const BASE = "https://api.liteapi.travel/v3.0";
+
+// Catalog changes slowly — 12h fresh / 3d stale. Keyed by
+// countryCode:cityName so different queries for the same city
+// hit the same cache entry.
+const catalogCache = new SWRCache<unknown[]>({
+  freshMs: 12 * 60 * 60 * 1000,
+  staleMs: 3 * 24 * 60 * 60 * 1000,
+  maxEntries: 200,
+});
 
 // City name → ISO country code mapping for our seeded destinations
 // (LiteAPI's hotel catalog requires countryCode). Extend as new
@@ -85,18 +95,16 @@ function priceEnvelope(
   };
 }
 
-async function fetchLiteHotels(
-  destination: string,
+async function fetchLiteHotelsLive(
+  countryCode: string,
+  cityName: string,
 ): Promise<RawHotel[]> {
   const key = process.env.LITEAPI_API_KEY;
   if (!key) return [];
 
-  const match = CITY_TO_COUNTRY.find((c) => c.pattern.test(destination));
-  if (!match) return []; // unmapped city — caller falls back to estimator
-
   const params = new URLSearchParams({
-    countryCode: match.country,
-    cityName: match.city,
+    countryCode,
+    cityName,
     limit: "6",
   });
 
@@ -112,6 +120,18 @@ async function fetchLiteHotels(
   if (!res.ok) return [];
   const body = (await res.json()) as HotelsResponse;
   return body.data ?? [];
+}
+
+async function fetchLiteHotels(destination: string): Promise<RawHotel[]> {
+  const match = CITY_TO_COUNTRY.find((c) => c.pattern.test(destination));
+  if (!match) return []; // unmapped city — caller falls back to estimator
+
+  const cacheKey = `${match.country}:${match.city}`;
+  const cached = await catalogCache.get(cacheKey, async () => {
+    const rows = await fetchLiteHotelsLive(match.country, match.city);
+    return rows as unknown[];
+  });
+  return cached.value as RawHotel[];
 }
 
 function stripHtml(input: string | undefined, maxLen = 140): string {

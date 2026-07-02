@@ -9,7 +9,26 @@
  * Timeout: 4s per spec.
  */
 
+import { SWRCache } from "@/lib/swr-cache";
+
 const BASE = "https://routes.googleapis.com/directions/v2";
+
+// Routes rarely change — 6h fresh, 24h stale. Keyed by rounded coords
+// so tiny GPS jitter hits the same cache entry.
+const routeCache = new SWRCache<RouteLeg | null>({
+  freshMs: 6 * 60 * 60 * 1000,
+  staleMs: 24 * 60 * 60 * 1000,
+  maxEntries: 1000,
+});
+
+function routeKey(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+  mode: string,
+): string {
+  const round = (n: number) => Math.round(n * 1000) / 1000;
+  return `${mode}|${round(a.lat)},${round(a.lng)}->${round(b.lat)},${round(b.lng)}`;
+}
 
 export type TravelMode =
   | "WALK"
@@ -44,11 +63,10 @@ function parseDuration(v: string | undefined): number {
   return match ? parseInt(match[1], 10) : 0;
 }
 
-/** Single origin → single destination. */
-export async function computeRoute(
+async function computeRouteLive(
   origin: Point,
   destination: Point,
-  travelMode: TravelMode = "WALK",
+  travelMode: TravelMode,
 ): Promise<RouteLeg | null> {
   const key = process.env.GOOGLE_MAPS_API_KEY;
   if (!key) return null;
@@ -97,23 +115,54 @@ export async function computeRoute(
   }
 }
 
+/** Single origin → single destination, SWR-cached. */
+export async function computeRoute(
+  origin: Point,
+  destination: Point,
+  travelMode: TravelMode = "WALK",
+): Promise<RouteLeg | null> {
+  const key = routeKey(origin, destination, travelMode);
+  const cached = await routeCache.get(key, () =>
+    computeRouteLive(origin, destination, travelMode),
+  );
+  return cached.value;
+}
+
 /**
  * Compute the walking travel time between consecutive itinerary items
  * on the same day. Returns null if the API is unavailable — callers
  * should degrade to showing items without transit context.
+ *
+ * Runs all pairs in parallel so worst-case latency is one Routes RTT,
+ * not N. Individual failures don't abort the whole day: legs that
+ * fail get filtered out, and if EVERY leg fails we return null so
+ * the caller can surface "walking times unavailable".
  */
 export async function computeDayLegs(
   points: Point[],
   travelMode: TravelMode = "WALK",
 ): Promise<RouteLeg[] | null> {
   if (points.length < 2) return [];
-  const legs: RouteLeg[] = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const leg = await computeRoute(points[i], points[i + 1], travelMode);
-    if (!leg) return legs.length > 0 ? legs : null;
-    legs.push({ ...leg, originIndex: i, destinationIndex: i + 1 });
-  }
-  return legs;
+  const pairs = points.slice(0, -1).map((p, i) => ({
+    origin: p,
+    destination: points[i + 1],
+    originIndex: i,
+    destinationIndex: i + 1,
+  }));
+  const settled = await Promise.all(
+    pairs.map(async (pair) => {
+      const leg = await computeRoute(pair.origin, pair.destination, travelMode);
+      return leg
+        ? {
+            ...leg,
+            originIndex: pair.originIndex,
+            destinationIndex: pair.destinationIndex,
+          }
+        : null;
+    }),
+  );
+  const legs = settled.filter((l): l is RouteLeg => l !== null);
+  return legs.length > 0 ? legs : null;
 }
 
 export function formatDuration(seconds: number): string {

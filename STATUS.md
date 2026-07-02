@@ -34,10 +34,11 @@ _Live status board — what's shipped, what's queued, what needs your hand._
 |---|---|
 | Provider abstraction | Every port returns `ProviderResult<T>` with `status: estimated / live_checked / cached / error`; factories degrade to null when keys absent |
 | Timeouts per spec | Places 3s, Routes 4s, Flights 8s, Events 5s, Calendar 8s, Image 30s |
-| **SWR cache helper** (`lib/swr-cache.ts`) | Generic freshMs/staleMs/maxEntries + concurrent-miss coalescing + LRU eviction. Ready to wrap any slow provider. |
-| Loading states | `loading.tsx` on flights / attractions / pricing / map — skeleton shell during server render |
+| **SWR cache wired** into Routes, Places (search + detail), LiteAPI hotels, PredictHQ events — cached serves stale while background revalidates, coalesces concurrent misses |
+| **Routes parallelized** — day-plan legs fire concurrently instead of sequentially (was N×4s worst case, now one RTT) |
+| Loading states | `loading.tsx` on every dynamic trip surface: flights / attractions / hotels / events / pricing / map / plan / visuals / decisions |
 | Currency conversion | `lib/fx.ts` normalizes fast-flights (ILS→USD etc) via open.er-api.com, 24h cache, fallback rates if unreachable |
-| Error surfacing | Every page shows a friendly card when an upstream API returns 4xx/5xx |
+| Error surfacing | Every page shows a friendly card when an upstream API returns 4xx/5xx; plan page surfaces per-day "walking times unavailable" when Routes fails |
 
 ### Testing
 

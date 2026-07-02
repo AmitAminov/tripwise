@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { enqueueDeepResearch, getJob } from "@/lib/deep-research/queue";
 import { defaultTripIntent } from "@/lib/types/trip-intent";
 
@@ -7,6 +7,21 @@ function encode(intent: unknown): string {
 }
 
 describe("Deep Research background queue", () => {
+  // The fire-and-forget job fetches weather (Open-Meteo needs no key), so
+  // stub fetch to keep the suite offline-safe and deterministic in CI.
+  // The queue swallows per-destination fetch failures by design.
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      throw new Error("network disabled in unit tests");
+    });
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+  });
+
   it("enqueues + returns a queued job immediately", () => {
     const intent = defaultTripIntent("deep_research");
     intent.candidateDestinations = ["prague"];

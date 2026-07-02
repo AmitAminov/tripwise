@@ -1,78 +1,192 @@
 # TripWise
 
-A couples decision arena for trip planning. Independent rating, delayed reveal.
-Built for an autumn 2026 trip. Design doc:
-[../.claude/plans/federated-popping-llama.md](C:/Users/ADMIN/.claude/plans/federated-popping-llama.md)
+A trip planner for couples that fixes the worst part of planning together:
+one partner's opinion anchoring the other's. TripWise lets both people rate
+flights, hotels, and activities **blind**, then reveals both sets of ratings
+at once — enforced in the database, not the UI.
+
+Built with Next.js 15 / React 19 / TypeScript on Supabase, plus a small
+Python FastAPI microservice for live flight prices.
+
+## The problem
+
+Couples planning a trip juggle dozens of tabs (flights, hotels, weather,
+events, visas) and then negotiate — where the first person to say "I love
+this one" biases the outcome. Every group-travel tool treats this as a chat
+problem. TripWise treats it as a **decision-integrity** problem.
+
+## The decision arena: blind rating + delayed reveal
+
+The core mechanic, enforced at the Postgres layer
+([`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql)):
+
+- Each partner rates the same options independently. A **row-level security
+  policy** (`ratings_select_own_or_revealed`) makes partner ratings
+  unreadable — not just hidden — until the decision status is `revealed`.
+- A **trigger** on the `ratings` table (`maybe_reveal_decision`) flips a
+  decision from `open` to `revealed` only when every trip member has rated
+  every option. No client code can peek early or force a reveal.
+- One-click "Save to arena" turns live flight offers, hotels, or attractions
+  into rateable options, so the mechanic sits inside a real planning flow
+  instead of a toy voting page.
+
+Because the invariant lives in the database, it holds across devices,
+browser tabs, and any future client.
+
+## Architecture: provider abstraction with graceful degradation
+
+Every external API sits behind a typed port
+([`lib/providers/types.ts`](lib/providers/types.ts)). All calls return a
+`ProviderResult<T>` envelope:
+
+```ts
+interface ProviderResult<T> {
+  data: T | null;
+  status: "estimated" | "live_checked" | "cached" | "checking" | "unavailable" | "error";
+  source: string;
+  checkedAt: string;
+  error?: string;
+}
+```
+
+so every surface renders data provenance ("live price" vs "estimate" vs
+"cached") uniformly. Factories in
+[`lib/providers/index.ts`](lib/providers/index.ts) pick the implementation
+from the environment: with zero API keys the app still runs — flights use a
+mock provider, events fall back to a curated seed, hotels to a
+deep-link estimator, and keyed surfaces (Places, AI images) degrade to a
+friendly "unavailable" state instead of crashing.
+
+Supporting layers:
+
+- **Stale-while-revalidate cache** ([`lib/swr-cache.ts`](lib/swr-cache.ts))
+  in front of Places, Routes, hotels, and events — serves stale data while
+  revalidating in the background and coalesces concurrent misses.
+- **Per-provider timeouts** (Places 3s, Routes 4s, Flights 8s, Events 5s)
+  so one slow upstream never stalls a page.
+- **Currency normalization** ([`lib/fx.ts`](lib/fx.ts)) with a 24h-cached
+  FX feed and hardcoded fallback rates when the feed is unreachable.
+
+## Grounded AI day planning
+
+The AI day-planner ([`lib/ai/gemini.ts`](lib/ai/gemini.ts)) uses Gemini with
+**structured output** (`responseSchema`, JSON mime type) and is grounded on
+real Google Places results — the model arranges venues that actually exist
+rather than inventing them. Items are geocoded on insert, walking-time chips
+between consecutive stops come from the Google Routes API (legs computed in
+parallel), and the plan exports to Google Calendar.
+
+## Live flight prices
+
+[`python-services/flights`](python-services/flights) is a FastAPI wrapper
+around [fast-flights](https://github.com/AWeirdDev/flights) (Google Flights
+scraping — real prices without a paid GDS), normalizing prices, durations,
+and layovers into the shape the Next.js `FlightProvider` expects.
 
 ## Stack
 
-- Next.js 15 (App Router) + React 19 + TypeScript
-- Tailwind v4
-- Supabase (Auth via magic link, Postgres, Row Level Security)
-- Bun (runtime + package manager)
-- Vercel (deploy)
+| Layer | Choice |
+|---|---|
+| Frontend / server | Next.js 15 (App Router), React 19, TypeScript, Tailwind v4 |
+| Auth + database | Supabase (magic-link auth, Postgres, RLS, triggers) |
+| Runtime / tooling | Bun |
+| Flights | Python 3.11+, FastAPI, fast-flights |
+| External APIs | Google Places / Routes / Geocoding / Maps JS, Gemini, Open-Meteo, PredictHQ, Ticketmaster (optional), LiteAPI (optional) |
+| Testing | Vitest (54 unit tests), Playwright (5 e2e smoke tests) |
 
-## One-time setup
+## Screenshots
 
-### 1. Create a Supabase project
+_Screenshots coming shortly; the walkthrough in [STATUS.md](STATUS.md#demo-walkthrough) describes each surface._
 
-1. Go to [supabase.com](https://supabase.com), sign in, create a project.
-   Region: pick one close to you. Save the database password somewhere.
-2. Wait ~2 min for provisioning.
-3. Settings → API:
-   - Copy **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
-   - Copy **anon / public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+| Surface | |
+|---|---|
+| Compare — ranked destinations | `docs/screenshots/compare.png` |
+| Trip detail — flights with live prices | `docs/screenshots/flights.png` |
+| Day plan — AI draft + walking-time chips | `docs/screenshots/plan.png` |
+| Decision arena — blind rating and reveal | `docs/screenshots/decisions.png` |
 
-### 2. Configure auth redirect
+## Run it locally
 
-Supabase dashboard → Authentication → URL Configuration:
-- **Site URL:** `http://localhost:3000`
-- **Redirect URLs:** add `http://localhost:3000/auth/callback`
-  (add the production equivalent when you deploy)
+Prerequisites: [Bun](https://bun.sh), a free [Supabase](https://supabase.com)
+project, and (optionally, for live flight prices) Python 3.11+.
 
-### 3. Run the schema migration
-
-SQL Editor → New query → paste the contents of
-[supabase/migrations/001_init.sql](supabase/migrations/001_init.sql) → Run.
-
-This creates: `profiles`, `trips`, `trip_members`, `trip_invites`,
-`decisions`, `options`, `ratings`, plus enums, RLS policies, and the
-reveal trigger. Idempotent on first run; re-running requires dropping
-the public schema first.
-
-### 4. Env vars
-
-```bash
-cp .env.local.example .env.local
-# then edit .env.local with your real values
-```
-
-## Run
+### 1. Install
 
 ```bash
 bun install
+```
+
+### 2. Set up Supabase
+
+1. Create a project at [supabase.com](https://supabase.com) and wait for
+   provisioning.
+2. **Run the schema:** SQL Editor → New query → paste the contents of
+   [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql) →
+   Run. Then repeat with
+   [`supabase/migrations/002_itinerary.sql`](supabase/migrations/002_itinerary.sql).
+   (The dashboard SQL editor is the intended path — no CLI required.)
+   This creates the tables, enums, RLS policies, and the reveal trigger.
+3. **Auth redirect:** Authentication → URL Configuration → Site URL
+   `http://localhost:3000`, and add `http://localhost:3000/auth/callback`
+   to Redirect URLs.
+
+### 3. Environment
+
+```bash
+cp .env.local.example .env.local
+```
+
+Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+(Supabase dashboard → Settings → API). Everything else is optional — the
+provider factories fall back to mocks, curated data, or a graceful
+"unavailable" state when a key is absent. `.env.local.example` documents
+where each key comes from.
+
+### 4. Run
+
+```bash
 bun run dev
 ```
 
-Open http://localhost:3000 — you'll be redirected to `/login`.
+Open http://localhost:3000, sign in with a magic link.
 
-## Verifying Day 1
+### 5. Optional: live flight prices
 
-End-to-end check that auth works:
+```bash
+cd python-services/flights
+python -m venv .venv
+.venv\Scripts\activate          # Windows (macOS/Linux: source .venv/bin/activate)
+pip install -r requirements.txt
+python -m uvicorn main:app --port 8001 --reload
+```
 
-1. Visit http://localhost:3000 → redirects to `/login`
-2. Enter your email, click "Send magic link"
-3. Open the email Supabase sent → click the link
-4. You should land back on the app at `/`, signed in, seeing your email
-5. Click "Sign out" → back to `/login`
+Then set `FAST_FLIGHTS_BASE_URL=http://localhost:8001` in `.env.local`.
 
-If any step breaks, fix that before starting Day 2.
+## Testing
 
-## Where we are
+```bash
+bun run test        # 54 Vitest unit tests (scoring, FX, SWR cache, visa, events, queue…)
+bun run typecheck   # tsc --noEmit
+bunx playwright install chromium   # one-time
+bun run test:e2e    # 5 Playwright smoke tests (needs `bun run dev` in another terminal)
+```
 
-- [x] **Day 1** — Foundation: scaffold, auth, sign-in/out
-- [ ] **Day 2** — Trips + invite flow
-- [ ] **Day 3** — Decisions + options
-- [ ] **Day 4** — The reveal mechanic (the IP)
-- [ ] **Day 5** — Polish + decided state
-- [ ] **Day 6-7** — Use it for the actual trip
+The unit suite needs no API keys or `.env.local` — mock providers make it
+self-contained, and CI runs it on every push.
+
+## Known limitations
+
+- **In-memory queue and cache.** The deep-research job queue and the SWR
+  cache live in process memory. They work for a single long-lived dev
+  server, but won't survive serverless deployment or multiple processes —
+  the interfaces are designed to swap in Redis / a durable queue (BullMQ,
+  Cloudflare Queues) without touching call sites, but that swap hasn't
+  happened.
+- **Placeholder scoring inputs.** Parts of the destination-score formula
+  run on curated estimates rather than live signals; the visa lookup is a
+  curated matrix covering common passport/destination pairs only.
+- **Scraper-backed flights.** fast-flights scrapes Google Flights; it's
+  great for a demo and fragile as a production dependency.
+- **Seeded destinations.** Deep editorial content exists for three
+  destinations (Bangkok, Prague, South Italy); other cities work via
+  geocoding but with thinner data.

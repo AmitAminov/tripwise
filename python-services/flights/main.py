@@ -5,8 +5,9 @@ Thin FastAPI wrapper over fast-flights (AWeirdDev/flights), which scrapes
 Google Flights so we get real prices without a paid GDS. Returns offers
 normalized to the shape our Next.js FlightProvider expects.
 
-Run in dev:
-    C:\\Users\\ADMIN\\virtual_environments\\research\\Scripts\\python.exe -m uvicorn main:app --port 8001 --reload
+Run in dev (from python-services/flights, inside a virtualenv with
+requirements.txt installed):
+    python -m uvicorn main:app --port 8001 --reload
 """
 
 from __future__ import annotations

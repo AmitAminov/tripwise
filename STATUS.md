@@ -81,13 +81,16 @@ _Live status board — what's shipped, what's queued, what needs your hand._
 ```sh
 # Terminal 1 — flights microservice (needed for live prices)
 cd python-services/flights
-C:\Users\ADMIN\virtual_environments\research\Scripts\python.exe -m uvicorn main:app --port 8001 --reload
+python -m venv .venv
+.venv\Scripts\activate          # Windows (macOS/Linux: source .venv/bin/activate)
+pip install -r requirements.txt
+python -m uvicorn main:app --port 8001 --reload
 
 # Terminal 2 — Next.js
 bun run dev
 
 # Terminal 3 — tests
-bun run test          # 47 Vitest unit tests
+bun run test          # 54 Vitest unit tests
 bunx playwright install chromium   # one-time
 bun run test:e2e      # 5 smoke tests (requires Next running)
 ```
@@ -165,7 +168,7 @@ tripwise/
 ├── python-services/flights/    — FastAPI wrapper around fast-flights
 ├── scripts/generate-heroes.ts  — Bun script to regenerate hero images
 ├── supabase/migrations/        — 001_init + 002_itinerary
-├── tests/                      — 47 Vitest unit tests
+├── tests/                      — 54 Vitest unit tests
 ├── e2e/                        — 5 Playwright smoke tests
 └── types/google.d.ts           — window.google ambient (GIS + Maps SDK)
 ```
@@ -188,6 +191,6 @@ tripwise/
 - `1306466` — Day 2: trips + invite
 - `931f6af` — Day 1: scaffold + auth
 
-## Original office-hours design doc
+## Original design doc
 
-Kept at [`~/.claude/plans/federated-popping-llama.md`](C:/Users/ADMIN/.claude/plans/federated-popping-llama.md). The Approach B "Trip Arena" scope was superseded by the full trip-planner spec, but the couples decision-arena reveal mechanic — the original IP — is live inside the bigger app and now accessible via one-click "Save to arena" from flights, hotels, and attractions.
+The project started from a design doc (kept outside the repo) whose Approach B "Trip Arena" scope was superseded by the full trip-planner spec — but the couples decision-arena reveal mechanic, the original IP, is live inside the bigger app and now accessible via one-click "Save to arena" from flights, hotels, and attractions.

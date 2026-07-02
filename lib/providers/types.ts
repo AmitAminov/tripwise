@@ -14,6 +14,8 @@ export type ProviderStatus =
   | "estimated"
   | "live_checked"
   | "cached"
+  | "checking"
+  | "unavailable"
   | "error";
 
 export interface ProviderResult<T> {
@@ -201,7 +203,8 @@ export interface WeatherForecast {
 export interface WeatherProvider {
   name: string;
   forecast(
-    city: string,
+    lat: number,
+    lng: number,
     from: string,
     to: string,
   ): Promise<ProviderResult<WeatherForecast>>;

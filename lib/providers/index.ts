@@ -15,6 +15,7 @@ import { deepLinkHotelProvider } from "./hotels/deep-links";
 import { liteapiHotelProvider } from "./hotels/liteapi";
 import { curatedEventsProvider } from "./events/curated";
 import { compositeEventsProvider } from "./events/composite";
+import { openMeteoProvider } from "./weather/openmeteo";
 import type {
   EventsProvider,
   FlightProvider,
@@ -54,6 +55,7 @@ export function imageProvider(): ImageProvider | null {
   return geminiImageProvider;
 }
 
-export function weatherProvider(): WeatherProvider | null {
-  return null;
+export function weatherProvider(): WeatherProvider {
+  // Open-Meteo is free and requires no key. Always available.
+  return openMeteoProvider;
 }

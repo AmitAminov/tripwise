@@ -71,6 +71,15 @@ export default async function VisualsPage({
           destinationName={destination}
           country={country}
           durationDays={durationDays}
+          fallbackCoords={
+            resolved
+              ? {
+                  name: resolved.name,
+                  lat: resolved.coords.lat,
+                  lng: resolved.coords.lng,
+                }
+              : null
+          }
         />
       </main>
     </>

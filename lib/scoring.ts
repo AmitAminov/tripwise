@@ -22,6 +22,44 @@
 
 import type { DestinationCard } from "@/data/destinations";
 import type { TripIntent } from "@/lib/types/trip-intent";
+import { SWRCache } from "@/lib/swr-cache";
+
+// Spec: "Cache destination comparison results by normalized TripIntent
+// hash." Ranking is deterministic — the same intent + destination set
+// always produces the same ordering, so caching aggressively is safe.
+const compareCache = new SWRCache<RankedDestination[]>({
+  freshMs: 60 * 60 * 1000, // 1h
+  staleMs: 24 * 60 * 60 * 1000,
+  maxEntries: 200,
+});
+
+/**
+ * Deterministic short hash of a TripIntent for cache keying.
+ * Serializes the fields that actually affect ranking (skipping
+ * default-only fields keeps the key stable across benign changes).
+ */
+export function intentHash(intent: TripIntent): string {
+  const material = {
+    depth: intent.planningDepth,
+    interests: [...(intent.preferences.interests ?? [])].sort(),
+    budget: intent.budget.perPerson ?? intent.budget.total ?? 0,
+    comfort: intent.budget.comfortLevel,
+    pace: intent.preferences.pace,
+    adults: intent.travelers.adults,
+    children: intent.travelers.children,
+    directOnly: intent.constraints.directFlightsOnly ?? false,
+    maxFlight: intent.constraints.maxFlightDurationHours ?? 0,
+    visa: intent.constraints.visaComplexityTolerance,
+    safety: intent.constraints.safetyRiskTolerance,
+    candidates: [...(intent.candidateDestinations ?? [])].sort(),
+  };
+  let h = 5381;
+  const str = JSON.stringify(material);
+  for (let i = 0; i < str.length; i++) {
+    h = ((h * 33) ^ str.charCodeAt(i)) >>> 0;
+  }
+  return h.toString(36);
+}
 
 export interface ScoreBreakdown {
   preferenceMatch: number;
@@ -223,9 +261,15 @@ export function rankDestinations(
   destinations: DestinationCard[],
   intent: TripIntent,
 ): RankedDestination[] {
-  return destinations
+  const ids = destinations.map((d) => d.id).sort().join(",");
+  const key = `${ids}|${intentHash(intent)}`;
+  const hit = compareCache.peek(key);
+  if (hit && hit.status.status !== "miss") return hit.value;
+  const ranked = destinations
     .map((d) => scoreDestination(d, intent))
     .sort((a, b) => b.score - a.score);
+  compareCache.set(key, ranked);
+  return ranked;
 }
 
 export function decodeIntent(encoded: string | null): TripIntent | null {

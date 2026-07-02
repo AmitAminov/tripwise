@@ -1,8 +1,7 @@
 /**
- * Composite events provider — merges PredictHQ (live) with the curated
- * seed. Both sources run in parallel; the seed always fires as a
- * cheap fallback so we still show something if PredictHQ has an
- * outage.
+ * Composite events provider — merges Ticketmaster + PredictHQ + curated
+ * seed. All three run in parallel; the seed always fires as a cheap
+ * fallback so we still show something if both live sources fail.
  */
 
 import type {
@@ -13,6 +12,7 @@ import type {
 } from "@/lib/providers/types";
 import { curatedEventsProvider } from "./curated";
 import { predictHqEventsProvider } from "./predicthq";
+import { ticketmasterEventsProvider } from "./ticketmaster";
 
 function dedupe(events: EventItem[]): EventItem[] {
   const seen = new Set<string>();
@@ -30,32 +30,52 @@ export const compositeEventsProvider: EventsProvider = {
   name: "composite",
   async search(q: EventSearchQuery): Promise<ProviderResult<EventItem[]>> {
     const now = new Date().toISOString();
-    const [phq, curated] = await Promise.all([
+    const runTicketmaster = Boolean(process.env.TICKETMASTER_API_KEY);
+    const [tm, phq, curated] = await Promise.all([
+      runTicketmaster
+        ? ticketmasterEventsProvider.search(q)
+        : Promise.resolve({
+            data: [],
+            status: "unavailable" as const,
+            source: "ticketmaster",
+            checkedAt: now,
+          }),
       predictHqEventsProvider.search(q),
       curatedEventsProvider.search(q),
     ]);
 
-    // Prefer PredictHQ ordering (higher local_rank first). Append the
-    // curated seed after so users always see the recurring hits.
+    // Ticketmaster first (ticket-selling events with URLs), then
+    // PredictHQ (ranked festivals + community), then curated seed
+    // (evergreen recurring hits).
     const merged = dedupe([
+      ...(tm.data ?? []),
       ...(phq.data ?? []),
       ...(curated.data ?? []),
     ]);
 
-    // Only claim "live" when PredictHQ actually contributed real data.
-    // If PHQ errored OR returned zero, this is curated-only.
+    // Live badge fires only when a live source actually returned rows.
+    const tmContributed =
+      tm.status === "live_checked" && (tm.data?.length ?? 0) > 0;
     const phqContributed =
-      phq.status === "live_checked" &&
-      (phq.data?.length ?? 0) > 0;
+      phq.status === "live_checked" && (phq.data?.length ?? 0) > 0;
+    const anyLive = tmContributed || phqContributed;
+
+    const sources: string[] = [];
+    if (tmContributed) sources.push("ticketmaster");
+    if (phqContributed) sources.push("predicthq");
+    sources.push("curated");
+
+    const errors: string[] = [];
+    if (tm.status === "error" && tm.error) errors.push(`tm: ${tm.error}`);
+    if (phq.status === "error" && phq.error)
+      errors.push(`phq: ${phq.error}`);
 
     return {
       data: merged,
-      status: phqContributed ? "live_checked" : "estimated",
-      source: phqContributed ? "predicthq+curated" : "curated",
+      status: anyLive ? "live_checked" : "estimated",
+      source: sources.join("+"),
       checkedAt: now,
-      // Surface the PredictHQ error even when curated saves the render,
-      // so the UI can show a "Provider unavailable" chip per spec.
-      error: phq.status === "error" ? phq.error : undefined,
+      error: errors.length > 0 ? errors.join(" · ") : undefined,
     };
   },
 };

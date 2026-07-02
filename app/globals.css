@@ -183,7 +183,8 @@ h3.serif {
   border-color: var(--color-primary);
 }
 
-/* Status labels — for provider status per spec */
+/* Status labels — full spec palette:
+   Estimated / Checking live / Live / Cached / Provider unavailable / Error */
 .status-est {
   display: inline-flex;
   align-items: center;
@@ -194,8 +195,14 @@ h3.serif {
 .status-live {
   color: var(--color-success);
 }
+.status-checking {
+  color: var(--color-primary);
+}
 .status-cached {
   color: var(--color-highlight);
+}
+.status-unavailable {
+  color: var(--color-warn);
 }
 .status-error {
   color: var(--color-danger);

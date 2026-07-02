@@ -19,10 +19,12 @@ export function VisualsGallery({
   destinationName,
   country,
   durationDays,
+  fallbackCoords,
 }: {
   destinationName: string;
   country: string;
   durationDays: number;
+  fallbackCoords: { name: string; lat: number; lng: number } | null;
 }) {
   const slots: Slot[] = [
     {
@@ -70,6 +72,7 @@ export function VisualsGallery({
   ];
 
   const [urls, setUrls] = useState<Record<string, string>>({});
+  const [sources, setSources] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [, startTransition] = useTransition();
@@ -85,12 +88,14 @@ export function VisualsGallery({
           prompt: slot.prompt,
           purpose: slot.purpose,
           aspect: slot.aspect,
+          fallback: fallbackCoords,
         }),
       });
       const body = (await res.json()) as {
         url?: string;
         error?: string;
         cached?: boolean;
+        source?: string;
       };
       if (!res.ok || !body.url) {
         setErrors((e) => ({
@@ -99,6 +104,10 @@ export function VisualsGallery({
         }));
       } else {
         setUrls((u) => ({ ...u, [slot.key]: body.url! }));
+        setSources((s) => ({
+          ...s,
+          [slot.key]: body.source ?? "gemini",
+        }));
       }
     } catch (e) {
       setErrors((err) => ({
@@ -157,7 +166,9 @@ export function VisualsGallery({
                 )}
                 {url && (
                   <div className="absolute top-3 right-3 text-[10px] uppercase tracking-widest text-white bg-black/40 px-2 py-1 rounded-full backdrop-blur-sm">
-                    AI · Nano Banana
+                    {sources[slot.key] === "places-fallback"
+                      ? "Photo · Google Places"
+                      : "AI · Nano Banana"}
                   </div>
                 )}
               </div>

@@ -218,12 +218,50 @@ export default async function PricingPage({
         (e) =>
           !e.component.toLowerCase().startsWith("flights") &&
           !e.component.toLowerCase().startsWith("lodging") &&
-          !e.component.toLowerCase().startsWith("buffer"),
+          !e.component.toLowerCase().startsWith("buffer") &&
+          !e.component.toLowerCase().startsWith("service") &&
+          !e.component.toLowerCase().startsWith("insurance"),
       )
       .map((e) => ({ ...e, ...scale(e, mult) }));
 
-    // Add buffer as 10% of everything else
-    const rowsSoFar = [flightsRow, lodgingRow, ...otherRows];
+    // Insurance: rough 3-6% of pre-buffer cost. Scales with guest count.
+    const preSub = [flightsRow, lodgingRow, ...otherRows].reduce(
+      (acc, r) => acc + r.expected,
+      0,
+    );
+    const insurance: PriceEstimate = {
+      component: "Insurance (est.)",
+      min: Math.round(preSub * 0.02 * guests),
+      expected: Math.round(preSub * 0.04 * guests),
+      max: Math.round(preSub * 0.07 * guests),
+      currency: "USD",
+      confidence: "low",
+      status: "estimated",
+      source: "internal_heuristic_v1",
+      checkedAt: new Date().toISOString(),
+    };
+
+    // Service fees: booking / card fees / small everyday miscellany.
+    const serviceFees: PriceEstimate = {
+      component: "Service fees + card fees",
+      min: Math.round(preSub * 0.015),
+      expected: Math.round(preSub * 0.025),
+      max: Math.round(preSub * 0.04),
+      currency: "USD",
+      confidence: "low",
+      status: "estimated",
+      source: "internal_heuristic_v1",
+      checkedAt: new Date().toISOString(),
+    };
+
+    // Buffer: 10% of everything else (matches spec's line item).
+    const rowsSoFar = [
+      flightsRow,
+      lodgingRow,
+      ...otherRows,
+      insurance,
+      serviceFees,
+    ];
     const subtotal = rowsSoFar.reduce((acc, r) => acc + r.expected, 0);
     const buffer: PriceEstimate = {
       component: "Buffer (10%)",

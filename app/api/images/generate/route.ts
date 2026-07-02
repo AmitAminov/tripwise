@@ -12,7 +12,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { imageProvider } from "@/lib/providers";
+import { imageProvider, placesProvider } from "@/lib/providers";
 
 const rateBuckets = new Map<string, { count: number; windowStart: number }>();
 const RATE_WINDOW_MS = 60_000;
@@ -42,8 +42,19 @@ function cacheKey(prompt: string, purpose: string): string {
   return h.toString(36);
 }
 
+interface FallbackCoords {
+  name: string;
+  lat: number;
+  lng: number;
+}
+
 export async function POST(request: NextRequest) {
-  let body: { prompt?: unknown; purpose?: unknown; aspect?: unknown };
+  let body: {
+    prompt?: unknown;
+    purpose?: unknown;
+    aspect?: unknown;
+    fallback?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -69,6 +80,18 @@ export async function POST(request: NextRequest) {
     ["16:9", "4:5", "1:1", "3:2"].includes(body.aspect)
       ? (body.aspect as "16:9" | "4:5" | "1:1" | "3:2")
       : "16:9";
+
+  // Optional fallback for spec's "Gemini failure → provider photos or
+  // neutral destination imagery" reliability rule. Client passes the
+  // destination it's asking about; on Gemini failure we look up a
+  // Places photo and return that instead.
+  const fallback: FallbackCoords | null =
+    body.fallback &&
+    typeof body.fallback === "object" &&
+    typeof (body.fallback as FallbackCoords).lat === "number" &&
+    typeof (body.fallback as FallbackCoords).lng === "number"
+      ? (body.fallback as FallbackCoords)
+      : null;
 
   if (prompt.length < 10 || prompt.length > 2000) {
     return NextResponse.json(
@@ -118,6 +141,37 @@ export async function POST(request: NextRequest) {
   });
 
   if (result.status === "error" || !result.data) {
+    // Spec's reliability rule: "Gemini failure → provider photos or
+    // neutral destination imagery". Try Places nearest-attraction
+    // photo if the client gave us fallback coords.
+    if (fallback) {
+      const places = placesProvider();
+      if (places) {
+        try {
+          const search = await places.search({
+            center: { lat: fallback.lat, lng: fallback.lng },
+            kind: "attractions",
+            radiusMeters: 3000,
+            limit: 6,
+          });
+          const withPhoto = search.data?.find((p) => p.photoUrl);
+          if (withPhoto?.photoUrl) {
+            return NextResponse.json({
+              url: withPhoto.photoUrl,
+              cacheKey: key,
+              model: "google-places-photo",
+              cached: false,
+              source: "places-fallback",
+              fallbackAttraction: withPhoto.name,
+              geminiError: result.error,
+            });
+          }
+        } catch {
+          // fall through to the plain error path
+        }
+      }
+    }
+
     return NextResponse.json(
       { error: result.error ?? "Image generation failed." },
       { status: 502 },
@@ -131,5 +185,6 @@ export async function POST(request: NextRequest) {
     cacheKey: key,
     model: result.data.model,
     cached: false,
+    source: "gemini",
   });
 }

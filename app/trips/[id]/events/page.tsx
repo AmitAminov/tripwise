@@ -62,8 +62,9 @@ export default async function EventsPage({
           <h1 className="font-serif text-3xl">
             What&apos;s on in {destination}
           </h1>
-          <p className="text-sm text-[color:var(--color-muted)] mt-1">
-            {trip.start_date} → {trip.end_date} ·{" "}
+          <p className="text-sm text-[color:var(--color-muted)] mt-1 flex flex-wrap gap-2 items-center">
+            <span>{trip.start_date} → {trip.end_date}</span>
+            <span>·</span>
             {result?.status === "live_checked" ? (
               <span className="status-est status-live inline-flex">
                 <span className="status-dot" /> Live from{" "}
@@ -73,6 +74,17 @@ export default async function EventsPage({
               <span className="status-est inline-flex">
                 <span className="status-dot" /> Curated
               </span>
+            )}
+            {result?.error && (
+              <>
+                <span>·</span>
+                <span
+                  className="status-est status-unavailable inline-flex"
+                  title={result.error}
+                >
+                  <span className="status-dot" /> Live provider unavailable
+                </span>
+              </>
             )}
           </p>
         </div>

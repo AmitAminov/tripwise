@@ -28,7 +28,15 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      // The chrome-headless-shell binary occasionally fails to connect
+      // on Windows (Playwright 1.61+). Force the full chromium build
+      // instead — slightly slower launch but reliable across platforms.
+      use: {
+        ...devices["Desktop Chrome"],
+        launchOptions: {
+          channel: "chromium",
+        },
+      },
     },
   ],
   // No global webServer — spec's demo assumes local dev server running.
@@ -39,7 +47,8 @@ export default defineConfig({
           command: "bun run dev",
           url: BASE_URL,
           reuseExistingServer: !process.env.CI,
-          timeout: 120_000,
+          // Next dev cold-start + first-request compile can exceed 120s.
+          timeout: 300_000,
         },
       }
     : {}),

@@ -113,9 +113,15 @@ export default async function HotelsPage({
           <p className="text-sm text-[color:var(--color-muted)] mt-1">
             {nights} night{nights === 1 ? "" : "s"} · {guests} guest
             {guests === 1 ? "" : "s"} ·{" "}
-            <span className="status-est inline-flex">
-              <span className="status-dot" /> Estimated
-            </span>
+            {result?.status === "live_checked" ? (
+              <span className="status-est status-live inline-flex">
+                <span className="status-dot" /> Live from LiteAPI
+              </span>
+            ) : (
+              <span className="status-est inline-flex">
+                <span className="status-dot" /> Estimated
+              </span>
+            )}
           </p>
         </div>
 
@@ -162,20 +168,23 @@ export default async function HotelsPage({
           <section className="mb-8">
             <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
               <h2 className="text-xs uppercase tracking-widest text-[color:var(--color-muted)]">
-                Best areas
+                {result?.status === "live_checked" ? "Candidate hotels" : "Best areas"}
               </h2>
               {estimate.areas.length >= 2 && (
                 <SendToArenaButton
                   tripId={trip.id}
                   seed={{
-                    title: `Which area to stay in ${destination}?`,
+                    title:
+                      result?.status === "live_checked"
+                        ? `Which hotel in ${destination}?`
+                        : `Which area to stay in ${destination}?`,
                     category: "lodging",
                     options: estimate.areas.map((a) => ({
                       label: a.name,
                       notes: `${a.vibe} · ${formatUSD(a.perNight.min)}-${formatUSD(a.perNight.max)}/night`,
                     })),
                   }}
-                  label={`Compare ${estimate.areas.length} areas in arena →`}
+                  label={`Compare ${estimate.areas.length} ${result?.status === "live_checked" ? "hotels" : "areas"} in arena →`}
                   className="btn btn-accent text-xs"
                 />
               )}
@@ -255,9 +264,9 @@ export default async function HotelsPage({
             </a>
           </div>
           <p className="text-xs text-[color:var(--color-muted)] mt-4">
-            We don&apos;t scrape hotel inventory — the buttons above open
-            each provider&apos;s own search with your trip details pre-filled.
-            Real inventory API arrives when you connect LiteAPI or RateHawk.
+            {result?.status === "live_checked"
+              ? "Hotel candidates above are live inventory from LiteAPI (spec's partner-approved inventory path). The deep links below open provider search for cross-shopping and booking."
+              : "We don't scrape hotel inventory — the buttons above open each provider's own search with your trip details pre-filled. Live inventory lights up when LITEAPI_API_KEY is set."}
           </p>
         </section>
       </main>

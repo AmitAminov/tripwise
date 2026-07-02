@@ -12,7 +12,9 @@ import { fastFlightsProvider } from "./flights/fast-flights";
 import { googlePlacesProvider } from "./places/google";
 import { geminiImageProvider } from "./images/gemini";
 import { deepLinkHotelProvider } from "./hotels/deep-links";
+import { liteapiHotelProvider } from "./hotels/liteapi";
 import { curatedEventsProvider } from "./events/curated";
+import { compositeEventsProvider } from "./events/composite";
 import type {
   EventsProvider,
   FlightProvider,
@@ -23,8 +25,6 @@ import type {
 } from "./types";
 
 export function flightProvider(): FlightProvider {
-  // If FAST_FLIGHTS_BASE_URL is set, prefer the real scraper-backed
-  // service. Falls through to mock on any transport error at call time.
   if (process.env.FAST_FLIGHTS_BASE_URL) {
     return fastFlightsProvider;
   }
@@ -36,14 +36,16 @@ export function placesProvider(): PlacesProvider | null {
   return googlePlacesProvider;
 }
 
-export function eventsProvider(): EventsProvider | null {
-  // Curated seed always available; Ticketmaster/PredictHQ layer on top
-  // when TICKETMASTER_API_KEY / PREDICTHQ_API_KEY are present.
+export function eventsProvider(): EventsProvider {
+  // Composite = PredictHQ + curated when the PredictHQ key is available,
+  // otherwise curated-only. Always returns SOMETHING.
+  if (process.env.PREDICTHQ_API_KEY) return compositeEventsProvider;
   return curatedEventsProvider;
 }
 
-export function hotelProvider(): HotelProvider | null {
-  // Always available — pure estimates + deep-link construction.
+export function hotelProvider(): HotelProvider {
+  // LiteAPI when the key is set; falls back internally to deep-links.
+  if (process.env.LITEAPI_API_KEY) return liteapiHotelProvider;
   return deepLinkHotelProvider;
 }
 

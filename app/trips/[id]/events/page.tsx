@@ -64,9 +64,16 @@ export default async function EventsPage({
           </h1>
           <p className="text-sm text-[color:var(--color-muted)] mt-1">
             {trip.start_date} → {trip.end_date} ·{" "}
-            <span className="status-est inline-flex">
-              <span className="status-dot" /> Curated
-            </span>
+            {result?.status === "live_checked" ? (
+              <span className="status-est status-live inline-flex">
+                <span className="status-dot" /> Live from{" "}
+                {result.source ?? "PredictHQ"}
+              </span>
+            ) : (
+              <span className="status-est inline-flex">
+                <span className="status-dot" /> Curated
+              </span>
+            )}
           </p>
         </div>
 
@@ -121,15 +128,9 @@ export default async function EventsPage({
         )}
 
         <p className="text-xs text-[color:var(--color-muted)] mt-6">
-          These are hand-curated recurring festivals + cultural events. Live
-          concert/theater inventory arrives with Ticketmaster (free tier at{" "}
-          <a
-            href="https://developer-acct.ticketmaster.com/"
-            className="text-[color:var(--color-primary)] underline"
-          >
-            developer-acct.ticketmaster.com
-          </a>
-          ).
+          {result?.status === "live_checked"
+            ? "Live rankings from PredictHQ merged with our curated recurring festivals. Filtered by country hint so cities like \"New Prague, MN\" don't leak in."
+            : "Hand-curated recurring festivals + cultural events. Live inventory lights up when PREDICTHQ_API_KEY is set."}
         </p>
       </main>
     </>

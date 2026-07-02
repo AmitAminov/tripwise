@@ -49,3 +49,10 @@ python-services/*/.venv/
 # editor
 .vscode/
 .idea/
+
+# playwright + vitest artifacts
+test-results/
+playwright-report/
+.playwright/
+.tmp/
+coverage/

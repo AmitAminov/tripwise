@@ -50,9 +50,15 @@ python-services/*/.venv/
 .vscode/
 .idea/
 
+# local agent/tooling state
+.claude/
+
 # playwright + vitest artifacts
 test-results/
 playwright-report/
 .playwright/
 .tmp/
 coverage/
+
+# disk-persistent SWR cache (Places / Routes / Hotels / Events / Weather)
+.tripwise-cache/

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { placesProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
+import { SendToArenaButton } from "@/components/send-to-arena-button";
 
 function firstStr(v: string | string[] | undefined): string | undefined {
   if (Array.isArray(v)) return v[0];
@@ -143,6 +144,38 @@ export default async function AttractionsPage({
             }
           />
         )}
+
+        {result?.status === "live_checked" &&
+          result.data &&
+          result.data.length >= 2 && (
+            <div className="mb-4">
+              <SendToArenaButton
+                tripId={trip.id}
+                seed={{
+                  title:
+                    kind === "restaurants"
+                      ? `Where to eat in ${coords?.name ?? trip.destination ?? trip.name}?`
+                      : kind === "cafes"
+                        ? `Which café in ${coords?.name ?? trip.destination ?? trip.name}?`
+                        : kind === "bars"
+                          ? `Which bar in ${coords?.name ?? trip.destination ?? trip.name}?`
+                          : `Which attraction to prioritize in ${coords?.name ?? trip.destination ?? trip.name}?`,
+                  category:
+                    kind === "restaurants" || kind === "cafes" || kind === "bars"
+                      ? "food"
+                      : "activity",
+                  options: result.data.slice(0, 6).map((p) => ({
+                    label: p.name,
+                    notes: p.rating
+                      ? `${p.rating.toFixed(1)}★${p.address ? " · " + p.address : ""}`
+                      : (p.address ?? undefined),
+                  })),
+                }}
+                label={`Compare top ${Math.min(6, result.data.length)} in arena →`}
+                className="btn btn-accent text-xs"
+              />
+            </div>
+          )}
 
         {result?.status === "live_checked" && result.data && (
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

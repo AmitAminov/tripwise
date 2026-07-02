@@ -9,6 +9,7 @@ import {
   buildHostelworldUrl,
 } from "@/lib/providers/hotels/deep-links";
 import { formatUSD } from "@/lib/format";
+import { SendToArenaButton } from "@/components/send-to-arena-button";
 
 const COMFORT_LEVELS = [
   { value: "budget", label: "Budget" },
@@ -159,9 +160,26 @@ export default async function HotelsPage({
         {/* Areas */}
         {estimate?.areas && estimate.areas.length > 0 && (
           <section className="mb-8">
-            <h2 className="text-xs uppercase tracking-widest text-[color:var(--color-muted)] mb-3">
-              Best areas
-            </h2>
+            <div className="flex items-baseline justify-between mb-3 gap-3 flex-wrap">
+              <h2 className="text-xs uppercase tracking-widest text-[color:var(--color-muted)]">
+                Best areas
+              </h2>
+              {estimate.areas.length >= 2 && (
+                <SendToArenaButton
+                  tripId={trip.id}
+                  seed={{
+                    title: `Which area to stay in ${destination}?`,
+                    category: "lodging",
+                    options: estimate.areas.map((a) => ({
+                      label: a.name,
+                      notes: `${a.vibe} · ${formatUSD(a.perNight.min)}-${formatUSD(a.perNight.max)}/night`,
+                    })),
+                  }}
+                  label={`Compare ${estimate.areas.length} areas in arena →`}
+                  className="btn btn-accent text-xs"
+                />
+              )}
+            </div>
             <div className="grid gap-3 md:grid-cols-2">
               {estimate.areas.map((area) => (
                 <div key={area.name} className="card p-4">

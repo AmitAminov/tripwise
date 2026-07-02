@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateText } from "@/lib/ai/gemini";
 import { placesProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
+import { geocode } from "@/lib/geocoding";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -200,29 +201,39 @@ Return JSON matching the schema.`;
     positionsBySlot.set(slot, (rows?.[0]?.position ?? -1) + 1);
   }
 
-  const inserts = parsed.items
-    .filter((it) => it.title && isSlot(it.slot))
-    .map((it) => {
-      const slot = it.slot as Slot;
-      const pos = positionsBySlot.get(slot) ?? 0;
-      positionsBySlot.set(slot, pos + 1);
-      // Tag AI-drafted notes so the provenance is preserved in the DB
-      // (spec: clearly label AI-generated content). Users can freely
-      // edit or remove the tag.
-      const rawNotes = it.notes?.slice(0, 260) ?? "";
-      const notes = rawNotes
-        ? `${rawNotes} · [AI draft]`
-        : "[AI draft]";
-      return {
-        trip_id: tripId,
-        day_index: dayIndex,
-        slot,
-        position: pos,
-        title: it.title.slice(0, 200),
-        notes,
-        created_by: user.id,
-      };
-    });
+  // Geocode each drafted item title within the destination context
+  // so Routes can compute walking-time chips between consecutive items.
+  // Run all lookups in parallel — geocoding is cached in-memory.
+  const drafts = parsed.items.filter((it) => it.title && isSlot(it.slot));
+  const geocoded = await Promise.all(
+    drafts.map((it) =>
+      geocode(`${it.title}, ${destination}`).catch(() => null),
+    ),
+  );
+
+  const inserts = drafts.map((it, i) => {
+    const slot = it.slot as Slot;
+    const pos = positionsBySlot.get(slot) ?? 0;
+    positionsBySlot.set(slot, pos + 1);
+    // Tag AI-drafted notes so the provenance is preserved in the DB
+    // (spec: clearly label AI-generated content). Users can freely
+    // edit or remove the tag.
+    const rawNotes = it.notes?.slice(0, 260) ?? "";
+    const notes = rawNotes ? `${rawNotes} · [AI draft]` : "[AI draft]";
+    const geoHit = geocoded[i];
+    return {
+      trip_id: tripId,
+      day_index: dayIndex,
+      slot,
+      position: pos,
+      title: it.title.slice(0, 200),
+      notes,
+      address: geoHit?.formattedAddress ?? null,
+      coords_lat: geoHit?.coords.lat ?? null,
+      coords_lng: geoHit?.coords.lng ?? null,
+      created_by: user.id,
+    };
+  });
 
   if (inserts.length === 0) return { error: "No valid items to insert." };
 

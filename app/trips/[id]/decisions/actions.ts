@@ -159,6 +159,92 @@ export async function markDecided(
   return {};
 }
 
+export type DecisionSeed = {
+  title: string;
+  category:
+    | "lodging"
+    | "food"
+    | "activity"
+    | "transit"
+    | "day_plan"
+    | "other";
+  options: Array<{
+    label: string;
+    url?: string | null;
+    notes?: string | null;
+  }>;
+};
+
+/**
+ * Composite action: create a decision + all its candidate options in one
+ * transaction (best-effort — we roll back on option-insert failure).
+ * Called from the flight/hotel/attraction "Save to decision arena"
+ * buttons so users can jump straight from browsing candidates to
+ * rating them.
+ */
+export async function createDecisionFromCandidates(
+  tripId: string,
+  seed: DecisionSeed,
+): Promise<{ error?: string; decisionId?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  const title = seed.title.trim();
+  if (title.length < 1 || title.length > 200) {
+    return { error: "Decision title must be 1-200 characters." };
+  }
+  if (!isCategory(seed.category)) {
+    return { error: "Invalid category." };
+  }
+  const options = seed.options
+    .map((o, i) => ({
+      label: (o.label ?? "").trim(),
+      url: o.url?.trim() || null,
+      notes: o.notes?.trim() || null,
+      position: i,
+    }))
+    .filter((o) => o.label.length > 0 && o.label.length <= 200);
+  if (options.length < 2) {
+    return { error: "Need at least 2 non-empty options." };
+  }
+
+  const { data: decision, error: createErr } = await supabase
+    .from("decisions")
+    .insert({
+      trip_id: tripId,
+      title,
+      category: seed.category,
+      created_by: user.id,
+    })
+    .select("id")
+    .single();
+
+  if (createErr || !decision) {
+    return { error: createErr?.message ?? "Failed to create decision." };
+  }
+
+  const inserts = options.map((o) => ({
+    decision_id: decision.id,
+    label: o.label,
+    url: o.url,
+    notes: o.notes,
+    position: o.position,
+  }));
+
+  const { error: optErr } = await supabase.from("options").insert(inserts);
+  if (optErr) {
+    // Roll back — orphan decision would just clutter the arena.
+    await supabase.from("decisions").delete().eq("id", decision.id);
+    return { error: optErr.message };
+  }
+
+  revalidatePath(`/trips/${tripId}/decisions`);
+  return { decisionId: decision.id };
+}
+
 export async function reopenDecision(
   decisionId: string,
   tripId: string,

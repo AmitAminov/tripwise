@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { geocode } from "@/lib/geocoding";
 
 type Slot = "morning" | "afternoon" | "evening" | "any";
 
@@ -45,6 +46,18 @@ export async function addItineraryItem(
     .limit(1);
   const position = (existing?.[0]?.position ?? -1) + 1;
 
+  // Best-effort geocode using the trip's destination as context so Routes
+  // can later compute walking times between items. Silent on failure.
+  const { data: trip } = await supabase
+    .from("trips")
+    .select("destination")
+    .eq("id", tripId)
+    .maybeSingle();
+  const geoQuery = trip?.destination
+    ? `${title}, ${trip.destination}`
+    : title;
+  const geo = await geocode(geoQuery).catch(() => null);
+
   const { error } = await supabase.from("itinerary_items").insert({
     trip_id: tripId,
     day_index: dayIndex,
@@ -52,6 +65,9 @@ export async function addItineraryItem(
     position,
     title,
     notes,
+    address: geo?.formattedAddress ?? null,
+    coords_lat: geo?.coords.lat ?? null,
+    coords_lng: geo?.coords.lng ?? null,
     created_by: user.id,
   });
 

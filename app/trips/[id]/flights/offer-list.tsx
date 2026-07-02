@@ -4,13 +4,16 @@ import type {
   ProviderResult,
 } from "@/lib/providers/types";
 import { formatDurationHours, formatCurrency } from "@/lib/format";
+import { SendToArenaButton } from "@/components/send-to-arena-button";
 
 export function FlightOfferList({
   result,
   query,
+  tripId,
 }: {
   result: ProviderResult<FlightOffer[]>;
   query: FlightSearchQuery;
+  tripId: string;
 }) {
   if (result.status === "error" || !result.data) {
     return (
@@ -47,9 +50,19 @@ export function FlightOfferList({
     cached: "Cached",
   };
 
+  const topOffers = offers.slice(0, 4);
+  const arenaSeed = {
+    title: `Which flight? ${query.originAirport} → ${query.destinationAirport}`,
+    category: "transit" as const,
+    options: topOffers.map((o) => ({
+      label: `${o.carriers[0] ?? "Airline"} · ${formatCurrency(o.totalPriceUSD, o.currency)} · ${formatDurationHours(o.totalDurationMinutes / 60)}${o.layoverCount === 0 ? " · direct" : ` · ${o.layoverCount} stop${o.layoverCount > 1 ? "s" : ""}`}`,
+      notes: `Depart ${o.outboundSegments[0]?.departAt ?? "TBD"}`,
+    })),
+  };
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <div>
           <div className="text-xs uppercase tracking-widest text-[color:var(--color-muted)]">
             {offers.length} offers · {query.originAirport} →{" "}
@@ -62,9 +75,19 @@ export function FlightOfferList({
             adult{query.adults > 1 ? "s" : ""}
           </div>
         </div>
-        <div className="status-est status-live">
-          <span className="status-dot" />{" "}
-          {statusLabel[result.status] ?? result.status}
+        <div className="flex items-center gap-3 flex-wrap">
+          {topOffers.length >= 2 && (
+            <SendToArenaButton
+              tripId={tripId}
+              seed={arenaSeed}
+              label={`Compare top ${topOffers.length} in arena →`}
+              className="btn btn-accent text-xs"
+            />
+          )}
+          <div className="status-est status-live">
+            <span className="status-dot" />{" "}
+            {statusLabel[result.status] ?? result.status}
+          </div>
         </div>
       </div>
 

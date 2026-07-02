@@ -98,7 +98,11 @@ export default async function FlightsPage({
         </div>
 
         {shouldSearch && searchResult && (
-          <FlightOfferList result={searchResult} query={usedQuery!} />
+          <FlightOfferList
+            result={searchResult}
+            query={usedQuery!}
+            tripId={trip.id}
+          />
         )}
 
         {!shouldSearch && (

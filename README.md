@@ -23,9 +23,9 @@ The core mechanic, enforced at the Postgres layer
 - Each partner rates the same options independently. A **row-level security
   policy** (`ratings_select_own_or_revealed`) makes partner ratings
   unreadable — not just hidden — until the decision status is `revealed`.
-- A **trigger** on the `ratings` table (`maybe_reveal_decision`) flips a
-  decision from `open` to `revealed` only when every trip member has rated
-  every option. No client code can peek early or force a reveal.
+- A **trigger** on the `ratings` table calls `maybe_reveal_decision`, which
+  flips a decision from `open` to `revealed` only when every trip member has
+  rated every option. No client code can peek early or force a reveal.
 - One-click "Save to arena" turns live flight offers, hotels, or attractions
   into rateable options, so the mechanic sits inside a real planning flow
   instead of a toy voting page.
@@ -172,7 +172,8 @@ bun run test:e2e    # 5 Playwright smoke tests (needs `bun run dev` in another t
 ```
 
 The unit suite needs no API keys or `.env.local` — mock providers make it
-self-contained, and CI runs it on every push.
+self-contained. CI (GitHub Actions) runs the typecheck and unit suite on
+pushes to `main` and on pull requests.
 
 ## Known limitations
 

@@ -24,6 +24,7 @@ const cache = new SWRCache<WeatherForecast | null>({
   freshMs: 24 * 60 * 60 * 1000,
   staleMs: 7 * 24 * 60 * 60 * 1000,
   maxEntries: 300,
+  name: "weather-openmeteo",
 });
 
 interface DailyResponse {

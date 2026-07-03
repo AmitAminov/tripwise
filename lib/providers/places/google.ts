@@ -32,11 +32,13 @@ const searchCache = new SWRCache<Place[]>({
   freshMs: 60 * 60 * 1000,
   staleMs: 12 * 60 * 60 * 1000,
   maxEntries: 500,
+  name: "places-search",
 });
 const detailCache = new SWRCache<Place | null>({
   freshMs: 60 * 60 * 1000,
   staleMs: 12 * 60 * 60 * 1000,
   maxEntries: 500,
+  name: "places-detail",
 });
 
 // Category → included place types for Places API (New).

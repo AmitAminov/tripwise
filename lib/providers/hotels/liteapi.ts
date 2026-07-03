@@ -33,6 +33,7 @@ const catalogCache = new SWRCache<unknown[]>({
   freshMs: 12 * 60 * 60 * 1000,
   staleMs: 3 * 24 * 60 * 60 * 1000,
   maxEntries: 200,
+  name: "hotels-liteapi",
 });
 
 // City name → ISO country code mapping for our seeded destinations

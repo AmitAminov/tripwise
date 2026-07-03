@@ -26,6 +26,7 @@ const cache = new SWRCache<{ events: unknown[]; error?: string }>({
   freshMs: 6 * 60 * 60 * 1000,
   staleMs: 48 * 60 * 60 * 1000,
   maxEntries: 400,
+  name: "events-ticketmaster",
 });
 
 interface RawTMEvent {

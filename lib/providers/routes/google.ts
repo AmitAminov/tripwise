@@ -19,6 +19,7 @@ const routeCache = new SWRCache<RouteLeg | null>({
   freshMs: 6 * 60 * 60 * 1000,
   staleMs: 24 * 60 * 60 * 1000,
   maxEntries: 1000,
+  name: "routes-google",
 });
 
 function routeKey(

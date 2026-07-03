@@ -29,6 +29,7 @@ const eventsCache = new SWRCache<{ events: unknown[]; error?: string }>({
   freshMs: 6 * 60 * 60 * 1000,
   staleMs: 48 * 60 * 60 * 1000,
   maxEntries: 400,
+  name: "events-predicthq",
 });
 
 // Reasonable defaults for a couple trip: skip low-rank noise and

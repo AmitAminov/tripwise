@@ -2,6 +2,15 @@
   "name": "tripwise",
   "version": "0.1.0",
   "private": true,
+  "author": "Amit Aminov <amitaminov1@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amitaminov/tripwise"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

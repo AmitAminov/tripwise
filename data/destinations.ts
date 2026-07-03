@@ -494,6 +494,13 @@ export const DESTINATIONS: DestinationCard[] = [
   ...buildBulkSeeds(),
 ];
 
+/**
+ * Featured set for the homepage: only the hand-tuned entries with real
+ * hero photos + curated copy. The full 50-destination catalog lives on
+ * /compare — the home page is a poster, not a listing.
+ */
+export const FEATURED_DESTINATIONS: DestinationCard[] = HAND_TUNED;
+
 export function getDestination(id: string): DestinationCard | undefined {
   return DESTINATIONS.find((d) => d.id === id);
 }

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { DESTINATIONS } from "@/data/destinations";
+import { DESTINATIONS, FEATURED_DESTINATIONS } from "@/data/destinations";
 import { Header } from "@/components/header";
 import { DestinationHeroCard } from "@/components/destination-hero-card";
 import { PlanningDepthSelector } from "@/components/planning-depth-selector";
@@ -83,16 +83,17 @@ export default async function Home() {
           </section>
         )}
 
-        {/* Featured destinations — the concrete Bangkok / Prague / S.Italy set */}
+        {/* Featured destinations — hand-tuned hero set only.
+            The full 50-destination catalog lives on /compare. */}
         <section className="mb-4">
           <div className="flex items-baseline justify-between mb-5">
             <h2 className="font-serif text-2xl">Featured — autumn 2026</h2>
             <Link href="/compare" className="btn btn-link text-sm">
-              Compare all →
+              Compare all {DESTINATIONS.length} →
             </Link>
           </div>
           <ul className="grid gap-5 md:grid-cols-3">
-            {DESTINATIONS.map((d) => (
+            {FEATURED_DESTINATIONS.map((d) => (
               <li key={d.id}>
                 <DestinationHeroCard destination={d} />
               </li>

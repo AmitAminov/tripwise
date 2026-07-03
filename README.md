@@ -92,18 +92,35 @@ and layovers into the shape the Next.js `FlightProvider` expects.
 | Runtime / tooling | Bun |
 | Flights | Python 3.11+, FastAPI, fast-flights |
 | External APIs | Google Places / Routes / Geocoding / Maps JS, Gemini, Open-Meteo, PredictHQ, Ticketmaster (optional), LiteAPI (optional) |
-| Testing | Vitest (54 unit tests), Playwright (5 e2e smoke tests) |
+| Testing | Vitest (58 unit tests), Playwright (5 e2e smoke tests) |
 
 ## Screenshots
 
-_Screenshots coming shortly; the walkthrough in [STATUS.md](STATUS.md#demo-walkthrough) describes each surface._
+Captured from the running dev server. Surfaces that depend on a missing or
+failing provider degrade to curated/mock data by design, so every page below
+renders regardless of which API keys are configured.
 
-| Surface | |
-|---|---|
-| Compare — ranked destinations | `docs/screenshots/compare.png` |
-| Trip detail — flights with live prices | `docs/screenshots/flights.png` |
-| Day plan — AI draft + walking-time chips | `docs/screenshots/plan.png` |
-| Decision arena — blind rating and reveal | `docs/screenshots/decisions.png` |
+**Home — planning depths + the destination library**
+
+![Home](docs/screenshots/home.png)
+
+**Survey — adaptive intake (flexible date windows, budget ranges)**
+
+![Survey](docs/screenshots/survey.png)
+
+**Compare — full library ranked against your answers**
+
+![Compare](docs/screenshots/compare.png)
+
+**Destination detail — cost breakdown, visa/safety, what's on**
+
+![Destination detail](docs/screenshots/destination.png)
+
+The trip surfaces behind sign-in (live flight prices, the AI day plan with
+walking-time chips, and the decision arena's blind-rate/reveal flow) need an
+authenticated Supabase session plus seeded trip data, so they aren't in the
+automated capture set; the walkthrough in
+[STATUS.md](STATUS.md#demo-walkthrough) describes each of them.
 
 ## Run it locally
 
@@ -165,7 +182,7 @@ Then set `FAST_FLIGHTS_BASE_URL=http://localhost:8001` in `.env.local`.
 ## Testing
 
 ```bash
-bun run test        # 54 Vitest unit tests (scoring, FX, SWR cache, visa, events, queue…)
+bun run test        # 58 Vitest unit tests (scoring, FX, SWR cache, visa, events, queue…)
 bun run typecheck   # tsc --noEmit
 bunx playwright install chromium   # one-time
 bun run test:e2e    # 5 Playwright smoke tests (needs `bun run dev` in another terminal)

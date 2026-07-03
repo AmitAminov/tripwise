@@ -9,7 +9,7 @@
  * Queues by making Queue conform to a common interface.
  */
 
-import { decodeIntent, rankDestinations } from "@/lib/scoring";
+import { decodeIntent, intentHash, rankDestinations } from "@/lib/scoring";
 import { DESTINATIONS } from "@/data/destinations";
 import { weatherProvider, eventsProvider } from "@/lib/providers";
 
@@ -140,7 +140,7 @@ async function runJob(id: string, intentEncoded: string) {
 
     // Stage 4 — assemble the report
     const result: DeepResearchResult = {
-      intentHash: id,
+      intentHash: intentHash(intent),
       ranked: ranked.map((r, i) => ({
         destinationId: r.destination.id,
         name: r.destination.name,

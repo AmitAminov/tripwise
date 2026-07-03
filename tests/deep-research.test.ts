@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { enqueueDeepResearch, getJob } from "@/lib/deep-research/queue";
 import { defaultTripIntent } from "@/lib/types/trip-intent";
+import { intentHash } from "@/lib/scoring";
 
 function encode(intent: unknown): string {
   return Buffer.from(JSON.stringify(intent)).toString("base64url");
@@ -42,5 +43,21 @@ describe("Deep Research background queue", () => {
 
   it("returns undefined for an unknown job id", () => {
     expect(getJob("no-such-job")).toBeUndefined();
+  });
+
+  it("stamps the result with the intent hash, not the job id", async () => {
+    const intent = defaultTripIntent("deep_research");
+    intent.candidateDestinations = ["prague"];
+    const job = enqueueDeepResearch(encode(intent));
+    // Poll for the fire-and-forget job to finish (provider fetches all
+    // fail fast against the stubbed fetch and are swallowed by design).
+    const deadline = Date.now() + 2_000;
+    while (getJob(job.id)?.status !== "done" && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    const fetched = getJob(job.id);
+    expect(fetched?.status).toBe("done");
+    expect(fetched?.result?.intentHash).toBe(intentHash(intent));
+    expect(fetched?.result?.intentHash).not.toBe(job.id);
   });
 });

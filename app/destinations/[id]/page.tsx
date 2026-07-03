@@ -6,6 +6,8 @@ import { Header } from "@/components/header";
 import { getDestination } from "@/data/destinations";
 import { formatUSD } from "@/lib/format";
 import { CostBreakdown } from "@/components/cost-breakdown";
+import { placesProvider, eventsProvider } from "@/lib/providers";
+import type { Place, EventItem } from "@/lib/providers/types";
 
 export default async function DestinationDetailPage({
   params,
@@ -20,6 +22,40 @@ export default async function DestinationDetailPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  // Live Places + Events, in parallel. Both are optional — the page still
+  // renders if the providers are absent or the calls fail.
+  const places = placesProvider();
+  const events = eventsProvider();
+  const now = new Date();
+  const windowStart = now.toISOString();
+  const windowEnd = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
+    .toISOString();
+
+  const [attractionsRes, eventsRes] = await Promise.all([
+    places
+      ? places.search({
+          center: d.coords,
+          radiusMeters: 4500,
+          kind: "attractions",
+          limit: 6,
+        })
+      : Promise.resolve(null),
+    events
+      ? events.search({
+          city: d.name,
+          from: windowStart,
+          to: windowEnd,
+          limit: 5,
+        })
+      : Promise.resolve(null),
+  ]);
+
+  const attractions: Place[] =
+    attractionsRes?.status === "live_checked" && attractionsRes.data
+      ? attractionsRes.data
+      : [];
+  const upcomingEvents: EventItem[] = eventsRes?.data ?? [];
 
   const [c1, c2] = d.gradient;
 
@@ -153,15 +189,93 @@ export default async function DestinationDetailPage({
             </section>
 
             <section>
-              <h2 className="font-serif text-2xl mb-3">Attractions & events</h2>
-              <div className="card p-6 text-center text-[color:var(--color-muted)]">
-                <p className="mb-2">
-                  Rich place data hooks up when Google Places is wired.
-                </p>
-                <p className="text-xs">
-                  Events via Ticketmaster / PredictHQ arrive at the same time.
-                </p>
-              </div>
+              <h2 className="font-serif text-2xl mb-3">Top attractions</h2>
+              {attractions.length > 0 ? (
+                <ul className="grid gap-3 sm:grid-cols-2">
+                  {attractions.map((p) => (
+                    <li
+                      key={p.id}
+                      className="card p-4 flex gap-3 items-start"
+                    >
+                      {p.photoUrl ? (
+                        <div className="relative w-16 h-16 shrink-0 rounded-md overflow-hidden bg-[color:var(--color-surface-2)]">
+                          <Image
+                            src={p.photoUrl}
+                            alt={p.name}
+                            fill
+                            sizes="64px"
+                            className="object-cover"
+                            unoptimized
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-16 h-16 shrink-0 rounded-md bg-gradient-to-br from-[color:var(--color-surface-2)] to-[color:var(--color-line)]" />
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{p.name}</div>
+                        <div className="text-xs text-[color:var(--color-muted)] capitalize">
+                          {p.category.replace(/_/g, " ")}
+                        </div>
+                        {typeof p.rating === "number" && (
+                          <div className="text-xs mt-0.5">
+                            ★ {p.rating.toFixed(1)}
+                            {p.ratingCount && (
+                              <span className="text-[color:var(--color-muted)]">
+                                {" "}
+                                ({p.ratingCount.toLocaleString()})
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="card p-4 text-sm text-[color:var(--color-muted)]">
+                  {places
+                    ? "Places API didn't return results for this area."
+                    : "Set GOOGLE_MAPS_API_KEY in .env.local to see live attractions here."}
+                </div>
+              )}
+            </section>
+
+            <section>
+              <h2 className="font-serif text-2xl mb-3">What&apos;s on soon</h2>
+              {upcomingEvents.length > 0 ? (
+                <ul className="space-y-2">
+                  {upcomingEvents.map((e) => (
+                    <li
+                      key={e.id}
+                      className="card p-4 flex items-start justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{e.name}</div>
+                        <div className="text-xs text-[color:var(--color-muted)] mt-0.5">
+                          {e.startAt.slice(0, 10)}
+                          {e.venueName ? ` · ${e.venueName}` : ""}
+                        </div>
+                      </div>
+                      {e.ticketUrl && (
+                        <a
+                          href={e.ticketUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="btn btn-ghost text-xs shrink-0"
+                        >
+                          Tickets →
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="card p-4 text-sm text-[color:var(--color-muted)]">
+                  No curated or live events land in the next two months for{" "}
+                  {d.name}. Live inventory expands when PredictHQ or
+                  Ticketmaster keys are set.
+                </div>
+              )}
             </section>
           </div>
 
@@ -183,15 +297,23 @@ export default async function DestinationDetailPage({
               </div>
               <CostBreakdown estimates={d.estimates} />
               {user ? (
-                <Link
-                  href={`/trips/new?destination=${encodeURIComponent(d.name)}`}
-                  className="btn btn-primary w-full mt-5"
-                >
-                  Save to a trip
-                </Link>
+                <>
+                  <Link
+                    href={`/survey/deep_research?destination=${encodeURIComponent(d.id)}`}
+                    className="btn btn-primary w-full mt-5"
+                  >
+                    Plan a trip here →
+                  </Link>
+                  <Link
+                    href={`/trips/new?destination=${encodeURIComponent(d.name)}`}
+                    className="btn btn-ghost w-full mt-2 text-sm"
+                  >
+                    Or just save to a trip
+                  </Link>
+                </>
               ) : (
                 <Link href="/login" className="btn btn-primary w-full mt-5">
-                  Sign in to save
+                  Sign in to plan a trip
                 </Link>
               )}
             </div>

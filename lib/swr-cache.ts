@@ -184,8 +184,12 @@ export class SWRCache<T> {
             return next;
           })
           .catch((err) => {
+            // Record and swallow: nothing on the stale path awaits this
+            // promise, so rethrowing would surface as an unhandled
+            // rejection. Coalesced miss-path callers that pick up this
+            // in-flight promise get the stale value instead of a crash.
             this.onBackgroundError(err, key);
-            throw err;
+            return hit.value;
           })
           .finally(() => {
             this.inFlight.delete(key);
@@ -223,8 +227,22 @@ export class SWRCache<T> {
     this.writeToDisk(key, entry);
   }
 
+  /** Fire-and-forget disk delete. Never throws. */
+  private deleteFromDisk(key: string): void {
+    if (!this.diskDir) return;
+    const file = path.join(this.diskDir, keyToFilename(key));
+    (async () => {
+      try {
+        await fs.promises.rm(file, { force: true });
+      } catch (err) {
+        this.onBackgroundError(err, `disk-delete:${key}`);
+      }
+    })();
+  }
+
   delete(key: string) {
     this.store.delete(key);
+    this.deleteFromDisk(key);
   }
 
   clear() {

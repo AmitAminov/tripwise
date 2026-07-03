@@ -62,3 +62,4 @@ coverage/
 
 # disk-persistent SWR cache (Places / Routes / Hotels / Events / Weather)
 .tripwise-cache/
+.gstack/

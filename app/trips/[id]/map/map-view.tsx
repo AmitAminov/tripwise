@@ -10,8 +10,30 @@ export type MapPin = {
   lng: number;
 } & (
   | { kind: "attraction" }
+  | { kind: "restaurant" }
+  | { kind: "cafe" }
+  | { kind: "bar" }
   | { kind: "plan"; dayIndex: number }
 );
+
+type ContextKind = "attraction" | "restaurant" | "cafe" | "bar";
+
+const CONTEXT_KINDS: ContextKind[] = ["attraction", "restaurant", "cafe", "bar"];
+
+const KIND_COLOR: Record<ContextKind | "plan", string> = {
+  attraction: "#c9a961",
+  restaurant: "#d97757",
+  cafe: "#8b6f47",
+  bar: "#7a4b8a",
+  plan: "#2d5f4e",
+};
+
+const KIND_LABEL: Record<ContextKind, string> = {
+  attraction: "Attractions",
+  restaurant: "Restaurants",
+  cafe: "Cafés",
+  bar: "Bars",
+};
 
 // Types are declared globally in types/google.d.ts.
 type GMap = NonNullable<
@@ -29,7 +51,7 @@ type GLatLngBounds = {
 };
 
 interface Filters {
-  showAttractions: boolean;
+  visibleKinds: Set<ContextKind>;
   dayFilter: number | "all";
 }
 
@@ -37,10 +59,14 @@ export function MapView({
   apiKey,
   center,
   pins,
+  height = 600,
+  showControls = true,
 }: {
   apiKey: string;
   center: { lat: number; lng: number };
   pins: MapPin[];
+  height?: number;
+  showControls?: boolean;
 }) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<GMap | null>(null);
@@ -56,10 +82,29 @@ export function MapView({
     ),
   ).sort((a, b) => a - b);
 
-  const [filters, setFilters] = useState<Filters>({
-    showAttractions: true,
+  const presentKinds = CONTEXT_KINDS.filter((k) =>
+    pins.some((p) => p.kind === k),
+  );
+
+  const [filters, setFilters] = useState<Filters>(() => ({
+    visibleKinds: new Set(presentKinds),
     dayFilter: "all",
-  });
+  }));
+
+  const presentKindsKey = presentKinds.join(",");
+  useEffect(() => {
+    setFilters((f) => {
+      const next = new Set(f.visibleKinds);
+      for (const k of presentKinds) next.add(k);
+      for (const k of Array.from(next)) {
+        if (!presentKinds.includes(k)) next.delete(k);
+      }
+      return { ...f, visibleKinds: next };
+    });
+    // presentKindsKey captures the identity of the set of context kinds
+    // currently present in the pins array; re-syncing when it changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presentKindsKey]);
 
   // Load Maps JS SDK once.
   useEffect(() => {
@@ -113,10 +158,11 @@ export function MapView({
     const infoWindow = new gmaps.InfoWindow();
 
     const filtered = pins.filter((p) => {
-      if (p.kind === "attraction") return filters.showAttractions;
-      if (p.kind === "plan" && filters.dayFilter !== "all")
+      if (p.kind === "plan") {
+        if (filters.dayFilter === "all") return true;
         return p.dayIndex === filters.dayFilter;
-      return true;
+      }
+      return filters.visibleKinds.has(p.kind);
     });
 
     const bounds: GLatLngBounds = new (
@@ -134,7 +180,7 @@ export function MapView({
         icon: {
           path: gmaps.SymbolPath?.CIRCLE ?? 0,
           scale: isPlan ? 10 : 7,
-          fillColor: isPlan ? "#2d5f4e" : "#c9a961",
+          fillColor: KIND_COLOR[pin.kind],
           fillOpacity: 1,
           strokeColor: "#ffffff",
           strokeWeight: 2,
@@ -162,42 +208,57 @@ export function MapView({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2 items-center">
-        <button
-          onClick={() =>
-            setFilters((f) => ({ ...f, showAttractions: !f.showAttractions }))
-          }
-          className="chip"
-          data-selected={filters.showAttractions}
-        >
-          <span
-            className="inline-block w-2 h-2 rounded-full mr-1"
-            style={{ background: "#c9a961" }}
-          />
-          Attractions
-        </button>
-        <button
-          onClick={() => setFilters((f) => ({ ...f, dayFilter: "all" }))}
-          className="chip"
-          data-selected={filters.dayFilter === "all"}
-        >
-          <span
-            className="inline-block w-2 h-2 rounded-full mr-1"
-            style={{ background: "#2d5f4e" }}
-          />
-          All days
-        </button>
-        {dayIndices.map((d) => (
-          <button
-            key={d}
-            onClick={() => setFilters((f) => ({ ...f, dayFilter: d }))}
-            className="chip"
-            data-selected={filters.dayFilter === d}
-          >
-            Day {d + 1}
-          </button>
-        ))}
-      </div>
+      {showControls && (
+        <div className="flex flex-wrap gap-2 items-center">
+          {presentKinds.map((k) => (
+            <button
+              key={k}
+              onClick={() =>
+                setFilters((f) => {
+                  const next = new Set(f.visibleKinds);
+                  if (next.has(k)) next.delete(k);
+                  else next.add(k);
+                  return { ...f, visibleKinds: next };
+                })
+              }
+              className="chip"
+              data-selected={filters.visibleKinds.has(k)}
+            >
+              <span
+                className="inline-block w-2 h-2 rounded-full mr-1"
+                style={{ background: KIND_COLOR[k] }}
+              />
+              {KIND_LABEL[k]}
+            </button>
+          ))}
+          {dayIndices.length > 0 && (
+            <span className="mx-1 text-[color:var(--color-line)]">|</span>
+          )}
+          {dayIndices.length > 0 && (
+            <button
+              onClick={() => setFilters((f) => ({ ...f, dayFilter: "all" }))}
+              className="chip"
+              data-selected={filters.dayFilter === "all"}
+            >
+              <span
+                className="inline-block w-2 h-2 rounded-full mr-1"
+                style={{ background: KIND_COLOR.plan }}
+              />
+              All days
+            </button>
+          )}
+          {dayIndices.map((d) => (
+            <button
+              key={d}
+              onClick={() => setFilters((f) => ({ ...f, dayFilter: d }))}
+              className="chip"
+              data-selected={filters.dayFilter === d}
+            >
+              Day {d + 1}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loadError && (
         <div className="card p-4">
@@ -213,13 +274,16 @@ export function MapView({
       <div
         ref={mapRef}
         className="w-full rounded-[var(--radius)] overflow-hidden border border-[color:var(--color-line)]"
-        style={{ height: "600px", background: "var(--color-surface-2)" }}
+        style={{ height: `${height}px`, background: "var(--color-surface-2)" }}
       />
 
-      <p className="text-xs text-[color:var(--color-muted)]">
-        Yellow pins: top Places (attractions/restaurants) near the destination.
-        Green pins: items on your day plan. Click any pin for details.
-      </p>
+      {showControls && (
+        <p className="text-xs text-[color:var(--color-muted)]">
+          Colored pins: top Places by category near the destination. Green pins:
+          items on your day plan. Toggle chips above to filter. Click any pin
+          for details.
+        </p>
+      )}
     </div>
   );
 }

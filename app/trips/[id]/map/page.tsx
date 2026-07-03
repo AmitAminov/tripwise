@@ -5,13 +5,31 @@ import { Header } from "@/components/header";
 import { placesProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { MapView, type MapPin } from "./map-view";
+import { KindsPicker } from "./kinds-picker";
+import { PICKABLE_KINDS, PLURAL_TO_PIN, type PickableKind } from "./kinds";
+
+function parseKinds(raw: string | string[] | undefined): PickableKind[] {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value) return ["attractions"];
+  const picked = value
+    .split(",")
+    .map((k) => k.trim().toLowerCase())
+    .filter((k): k is PickableKind =>
+      (PICKABLE_KINDS as readonly string[]).includes(k),
+    );
+  return picked.length > 0 ? picked : ["attractions"];
+}
 
 export default async function TripMapPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ kinds?: string | string[] }>;
 }) {
   const { id } = await params;
+  const { kinds: kindsParam } = await searchParams;
+  const selectedKinds = parseKinds(kindsParam);
 
   const supabase = await createClient();
   const {
@@ -41,28 +59,49 @@ export default async function TripMapPage({
   // Enrich pins: for items without coords, look up nearby Places.
   const provider = placesProvider();
 
-  // Also grab the top attractions to always show as context pins.
+  // Fetch each selected category in parallel; pin the results with their
+  // singular MapPin kind so the MapView can color and filter them.
   let contextPins: MapPin[] = [];
+  const kindErrors: Array<{ kind: PickableKind; error: string }> = [];
   if (provider && center) {
-    const result = await provider.search({
-      center: { lat: center.lat, lng: center.lng },
-      kind: "attractions",
-      radiusMeters: 4000,
-      limit: 12,
-    });
-    if (result.data) {
-      contextPins = result.data.map((p) => ({
-        id: `place:${p.id}`,
-        title: p.name,
-        lat: p.coords.lat,
-        lng: p.coords.lng,
-        kind: "attraction" as const,
-        subtitle:
-          p.rating != null
-            ? `${p.rating.toFixed(1)}★ · ${p.category.replace(/_/g, " ")}`
-            : p.category.replace(/_/g, " "),
-      }));
+    const results = await Promise.all(
+      selectedKinds.map(async (kind) => {
+        const res = await provider.search({
+          center: { lat: center.lat, lng: center.lng },
+          kind,
+          radiusMeters: 4000,
+          limit: 12,
+        });
+        return { kind, res };
+      }),
+    );
+    for (const { kind, res } of results) {
+      if (res.data) {
+        const pinKind = PLURAL_TO_PIN[kind];
+        for (const p of res.data) {
+          contextPins.push({
+            id: `place:${p.id}`,
+            title: p.name,
+            lat: p.coords.lat,
+            lng: p.coords.lng,
+            kind: pinKind,
+            subtitle:
+              p.rating != null
+                ? `${p.rating.toFixed(1)}★ · ${p.category.replace(/_/g, " ")}`
+                : p.category.replace(/_/g, " "),
+          } as MapPin);
+        }
+      } else if (res.error) {
+        kindErrors.push({ kind, error: res.error });
+      }
     }
+    // Dedupe by id (a place could match multiple kinds).
+    const seen = new Set<string>();
+    contextPins = contextPins.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
   }
 
   const itemPins: MapPin[] = (items ?? [])
@@ -125,11 +164,20 @@ export default async function TripMapPage({
         )}
 
         {clientKey && center && (
-          <MapView
-            apiKey={clientKey}
-            center={{ lat: center.lat, lng: center.lng }}
-            pins={[...contextPins, ...itemPins]}
-          />
+          <>
+            <KindsPicker initial={selectedKinds} />
+            {kindErrors.length > 0 && (
+              <div className="card p-3 mb-4 text-xs text-[color:var(--color-warn)]">
+                Couldn&apos;t load {kindErrors.map((e) => e.kind).join(", ")}
+                {" "}from Google Places. Other categories still shown.
+              </div>
+            )}
+            <MapView
+              apiKey={clientKey}
+              center={{ lat: center.lat, lng: center.lng }}
+              pins={[...contextPins, ...itemPins]}
+            />
+          </>
         )}
       </main>
     </>

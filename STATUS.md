@@ -1,8 +1,8 @@
-# TripWise — Build Status
+# TripWise — Feature Status
 
-_Live status board — what's shipped, what's queued, what needs your hand._
+_What's implemented, how it degrades without keys, and how to run it._
 
-## Current state (2026-07-02 — after Routes + Save-to-arena + SWR + Playwright)
+## Feature status
 
 ### Working end-to-end
 
@@ -40,7 +40,7 @@ _Live status board — what's shipped, what's queued, what needs your hand._
 |---|---|
 | Provider abstraction | Every port returns `ProviderResult<T>` with `status: estimated / live_checked / cached / error`; factories degrade to null when keys absent |
 | Timeouts per spec | Places 3s, Routes 4s, Flights 8s, Events 5s, Calendar 8s, Image 30s |
-| **SWR cache wired** into Routes, Places (search + detail), LiteAPI hotels, PredictHQ events — cached serves stale while background revalidates, coalesces concurrent misses |
+| **SWR cache wired** into Routes, Places (search + detail), LiteAPI hotels, PredictHQ events — cached serves stale while background revalidates, coalesces concurrent misses, persists named caches to disk across restarts |
 | **Routes parallelized** — day-plan legs fire concurrently instead of sequentially (was N×4s worst case, now one RTT) |
 | Loading states | `loading.tsx` on every dynamic trip surface: flights / attractions / hotels / events / pricing / map / plan / visuals / decisions |
 | Currency conversion | `lib/fx.ts` normalizes fast-flights (ILS→USD etc) via open.er-api.com, 24h cache, fallback rates if unreachable |
@@ -50,31 +50,23 @@ _Live status board — what's shipped, what's queued, what needs your hand._
 
 | Layer | Status |
 |---|---|
-| **Vitest unit** | ✅ **54/54 passing**: scoring, FX, format, curated events, hotels, SWR cache, visa, intent-hash, deep-research queue |
-| **Playwright E2E scaffold** | ✅ Config + 5 smoke tests written. Run: `bunx playwright install chromium` then `bun run test:e2e` (with `bun run dev` in another terminal). Chrome debug-pipe issue known on some sandboxed Windows sessions — runs cleanly in a normal desktop shell. |
+| **Vitest unit** | ✅ **58/58 passing**: scoring, FX, format, curated events, hotels, SWR cache (incl. disk persistence), visa, intent-hash, deep-research queue |
+| **Playwright E2E scaffold** | ✅ Config + 5 smoke tests. Run: `bunx playwright install chromium` then `bun run test:e2e` (with `bun run dev` in another terminal) |
 | Coverage target | ~80% of `lib/` covered by unit tests; Vitest coverage command wired |
 
-### Blocked / open
-
-| Item | Blocker |
-|---|---|
-| `002_itinerary.sql` migration | Manual paste into Supabase SQL Editor (30 sec) — otherwise Day plan / AI drafts / Calendar export show a "migration not applied" banner |
-| Redis / durable cache | In-memory SWR is the current sub. Same interface — swap when scale demands. |
-| Deep Research durable queue | In-memory job runner ships today; swap for BullMQ / Cloudflare Queues when multi-process required |
-| Bulk browser install for Playwright | ~120 MB one-time: `bunx playwright install chromium` |
-| Ticketmaster API key (optional) | Composite events already merges TM when `TICKETMASTER_API_KEY` is set; falls back to PredictHQ + curated when absent |
-
-## The concrete test case (unchanged)
+## The concrete test case
 
 - Origin: Tel Aviv (TLV)
 - Window: one week between 15 Sep and 10 Oct 2026
 - Travelers: 2 adults (couple)
 - Candidates: Bangkok, Prague, South Italy
 
-## Migrations to apply
+## Database migrations
 
-1. [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql) — you've applied this
-2. [`supabase/migrations/002_itinerary.sql`](supabase/migrations/002_itinerary.sql) — apply to unblock Day plan / AI drafts / Calendar export
+Apply both files in the Supabase SQL Editor before first run:
+
+1. [`supabase/migrations/001_init.sql`](supabase/migrations/001_init.sql) — auth, trips, decisions, ratings + RLS
+2. [`supabase/migrations/002_itinerary.sql`](supabase/migrations/002_itinerary.sql) — itinerary tables for Day plan / AI drafts / Calendar export (the app shows a "migration not applied" banner until this one is in)
 
 ## How to run
 
@@ -90,7 +82,7 @@ python -m uvicorn main:app --port 8001 --reload
 bun run dev
 
 # Terminal 3 — tests
-bun run test          # 54 Vitest unit tests
+bun run test          # 58 Vitest unit tests
 bunx playwright install chromium   # one-time
 bun run test:e2e      # 5 smoke tests (requires Next running)
 ```
@@ -143,12 +135,12 @@ tripwise/
 │           ├── visuals/        — Nano Banana mood board + trip poster
 │           └── decisions/      — couples decision arena (reveal IP)
 ├── components/                 — shared UI
-├── data/destinations.ts        — Bangkok/Prague/S.Italy seed
+├── data/destinations.ts        — 50-city seeded destination library
 ├── lib/
 │   ├── ai/gemini.ts            — server-only Gemini text client
 │   ├── format.ts               — currency + date helpers
 │   ├── fx.ts                   — free FX conversion w/ 24h cache
-│   ├── swr-cache.ts            — generic stale-while-revalidate
+│   ├── swr-cache.ts            — generic stale-while-revalidate w/ disk persistence
 │   ├── scoring.ts              — destination_score formula
 │   ├── geocoding.ts            — Google Geocoding
 │   ├── destination-coords.ts   — shared resolver (seed → geocoding)
@@ -168,28 +160,18 @@ tripwise/
 ├── python-services/flights/    — FastAPI wrapper around fast-flights
 ├── scripts/generate-heroes.ts  — Bun script to regenerate hero images
 ├── supabase/migrations/        — 001_init + 002_itinerary
-├── tests/                      — 54 Vitest unit tests
+├── tests/                      — 58 Vitest unit tests
 ├── e2e/                        — 5 Playwright smoke tests
 └── types/google.d.ts           — window.google ambient (GIS + Maps SDK)
 ```
 
-## Commit history highlights
+## Architecture notes
 
-- `0fe15ea` — Routes + Save-to-arena + SWR + Playwright
-- `ed71177` — AI Visuals (Nano Banana mood board + poster)
-- `cb66d42` — Vitest + Geocoding + Routes provider + loading
-- `d0c470e` — STATUS update
-- `8d7c290` — QA agent fixes
-- `b725251` — Spec close-out
-- `b016a73` — Nano Banana heroes
-- `57ea630` — Calendar export
-- `7e4a551` — AI day-planner + Gemini
-- `aa14596` — Decision arena + itinerary
-- `791d145` — Google Places
-- `c9d36b7` — Fast-flights integration
-- `03b59cb` — v3 shell / full pivot to trip planner
-- `1306466` — Day 2: trips + invite
-- `931f6af` — Day 1: scaffold + auth
+- **In-memory SWR + disk persistence** stands in for Redis; the public cache
+  surface is unchanged, so a Redis adapter is a drop-in swap when scale demands.
+- **Deep Research jobs** run on an in-process queue; the queue conforms to a
+  small interface so BullMQ / Cloudflare Queues can replace it for
+  multi-process deployments.
 
 ## Original design doc
 

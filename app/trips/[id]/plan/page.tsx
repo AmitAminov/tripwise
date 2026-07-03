@@ -12,6 +12,9 @@ import {
   formatDuration,
   type RouteLeg,
 } from "@/lib/providers/routes/google";
+import { placesProvider } from "@/lib/providers";
+import { resolveDestination } from "@/lib/destination-coords";
+import { MapView, type MapPin } from "../map/map-view";
 
 type Slot = "morning" | "afternoon" | "evening" | "any";
 
@@ -110,24 +113,98 @@ export default async function PlanPage({
   // can surface "walking times unavailable" per spec's reliability rule.
   const legsByDay = new Map<number, RouteLeg[]>();
   const routesUnavailableDays = new Set<number>();
-  await Promise.all(
-    Array.from({ length: totalDays }).map(async (_, dayIndex) => {
-      const dayItems = items.filter((i) => i.day_index === dayIndex);
-      const ordered = orderForDay(dayItems);
-      const points = ordered
-        .filter((i) => i.coords_lat != null && i.coords_lng != null)
-        .map((i) => ({ lat: i.coords_lat!, lng: i.coords_lng! }));
-      if (points.length < 2) return;
-      const legs = await computeDayLegs(points, "WALK");
-      if (legs && legs.length > 0) {
-        legsByDay.set(dayIndex, legs);
-      } else {
-        // We had ≥2 geocoded items but Routes gave us nothing —
-        // note it so the UI can degrade gracefully.
-        routesUnavailableDays.add(dayIndex);
-      }
-    }),
-  );
+
+  // Map preview data: pull destination coords + top attractions in parallel
+  // with the per-day leg work so the map ships as part of the page render.
+  const [resolvedDest] = await Promise.all([
+    resolveDestination(trip.destination),
+    Promise.all(
+      Array.from({ length: totalDays }).map(async (_, dayIndex) => {
+        const dayItems = items.filter((i) => i.day_index === dayIndex);
+        const ordered = orderForDay(dayItems);
+        const points = ordered
+          .filter((i) => i.coords_lat != null && i.coords_lng != null)
+          .map((i) => ({ lat: i.coords_lat!, lng: i.coords_lng! }));
+        if (points.length < 2) return;
+        const legs = await computeDayLegs(points, "WALK");
+        if (legs && legs.length > 0) {
+          legsByDay.set(dayIndex, legs);
+        } else {
+          routesUnavailableDays.add(dayIndex);
+        }
+      }),
+    ),
+  ]);
+
+  const mapCenter = resolvedDest
+    ? { lat: resolvedDest.coords.lat, lng: resolvedDest.coords.lng }
+    : null;
+
+  // Context pins from Google Places when available.
+  const places = placesProvider();
+  let contextPins: MapPin[] = [];
+  if (places && mapCenter) {
+    const result = await places.search({
+      center: mapCenter,
+      kind: "attractions",
+      radiusMeters: 4000,
+      limit: 10,
+    });
+    if (result.data) {
+      contextPins = result.data.map((p) => ({
+        id: `place:${p.id}`,
+        title: p.name,
+        lat: p.coords.lat,
+        lng: p.coords.lng,
+        kind: "attraction" as const,
+        subtitle:
+          p.rating != null
+            ? `${p.rating.toFixed(1)}★ · ${p.category.replace(/_/g, " ")}`
+            : p.category.replace(/_/g, " "),
+      }));
+    }
+  }
+
+  const itemPins: MapPin[] = items
+    .filter((i) => i.coords_lat != null && i.coords_lng != null)
+    .map((i) => ({
+      id: `item:${i.id}`,
+      title: i.title,
+      subtitle: `Day ${i.day_index + 1} · ${i.slot}`,
+      lat: i.coords_lat!,
+      lng: i.coords_lng!,
+      kind: "plan" as const,
+      dayIndex: i.day_index,
+    }));
+
+  const mapsClientKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? null;
+
+  // "Open in Google Maps" — build a directions URL with waypoints so tapping
+  // it on a phone opens the native Maps app pre-populated with the plan.
+  // Google Maps directions API supports up to 10 waypoints in a URL.
+  function googleMapsDirUrl(pts: { lat: number; lng: number }[]): string | null {
+    if (pts.length < 2) return null;
+    const slice = pts.slice(0, 10);
+    const origin = `${slice[0].lat},${slice[0].lng}`;
+    const destination = `${slice[slice.length - 1].lat},${slice[slice.length - 1].lng}`;
+    const waypoints = slice
+      .slice(1, -1)
+      .map((p) => `${p.lat},${p.lng}`)
+      .join("|");
+    const params = new URLSearchParams({
+      api: "1",
+      origin,
+      destination,
+      travelmode: "walking",
+    });
+    if (waypoints) params.set("waypoints", waypoints);
+    return `https://www.google.com/maps/dir/?${params.toString()}`;
+  }
+
+  const allDayPts = items
+    .filter((i) => i.coords_lat != null && i.coords_lng != null)
+    .map((i) => ({ lat: i.coords_lat!, lng: i.coords_lng! }));
+  const dirUrl = googleMapsDirUrl(allDayPts);
 
   return (
     <>
@@ -157,8 +234,55 @@ export default async function PlanPage({
               </p>
             )}
           </div>
-          <CalendarExportButton tripId={trip.id} />
+          <div className="flex items-center gap-2 shrink-0">
+            {dirUrl && (
+              <a
+                href={dirUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="btn btn-ghost text-xs"
+                title="Open your plan waypoints in Google Maps (walking directions)"
+              >
+                Open in Google Maps →
+              </a>
+            )}
+            <CalendarExportButton tripId={trip.id} />
+          </div>
         </div>
+
+        {mapsClientKey && mapCenter && (contextPins.length + itemPins.length > 0) && (
+          <div className="mb-6">
+            <MapView
+              apiKey={mapsClientKey}
+              center={mapCenter}
+              pins={[...contextPins, ...itemPins]}
+              height={320}
+              showControls={false}
+            />
+            <div className="mt-2 text-xs text-[color:var(--color-muted)] flex flex-wrap items-center gap-3">
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ background: "#c9a961" }}
+                />
+                Nearby attractions
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className="w-2 h-2 rounded-full"
+                  style={{ background: "#2d5f4e" }}
+                />
+                Your plan items
+              </span>
+              <Link
+                href={`/trips/${trip.id}/map`}
+                className="text-[color:var(--color-primary)] hover:underline ml-auto"
+              >
+                Full map + filters →
+              </Link>
+            </div>
+          </div>
+        )}
 
         {migrationMissing && (
           <div className="card p-6 mb-6">

@@ -67,10 +67,18 @@ const SAFETY_TOLERANCE = [
 
 /* ---------- component ---------- */
 
-export function IntermediateSurvey({ deep }: { deep?: boolean }) {
-  const [candidates, setCandidates] = useState<string[]>(
-    DESTINATIONS.map((d) => d.id),
-  );
+export function IntermediateSurvey({
+  deep,
+  presetDestination,
+}: {
+  deep?: boolean;
+  presetDestination?: string | null;
+}) {
+  const initialCandidates =
+    presetDestination && DESTINATIONS.some((d) => d.id === presetDestination)
+      ? [presetDestination]
+      : DESTINATIONS.map((d) => d.id);
+  const [candidates, setCandidates] = useState<string[]>(initialCandidates);
   const [interests, setInterests] = useState<string[]>([
     "food",
     "culture",
@@ -94,6 +102,9 @@ export function IntermediateSurvey({ deep }: { deep?: boolean }) {
     string[]
   >(["central", "wifi"]);
   const [dietary, setDietary] = useState<string[]>([]);
+  const [flexible, setFlexible] = useState<boolean>(false);
+  const [budgetMin, setBudgetMin] = useState<number>(1000);
+  const [budgetMax, setBudgetMax] = useState<number>(2500);
   const [pending, startTransition] = useTransition();
 
   function toggle(list: string[], set: (v: string[]) => void, id: string) {
@@ -122,6 +133,9 @@ export function IntermediateSurvey({ deep }: { deep?: boolean }) {
       formData.set("visa_tolerance", visaTol);
       formData.set("safety_tolerance", safetyTol);
     }
+    formData.set("date_mode", flexible ? "flexible_month" : "exact_dates");
+    formData.set("budget_per_person_min", String(budgetMin));
+    formData.set("budget_per_person_max", String(budgetMax));
     formData.set(
       "planning_depth",
       deep ? "deep_research" : "intermediate",
@@ -177,20 +191,59 @@ export function IntermediateSurvey({ deep }: { deep?: boolean }) {
 
       {/* Dates */}
       <Section title="When?">
-        <div className="grid grid-cols-2 gap-3">
-          <LabeledInput
-            type="date"
-            label="Start"
-            name="start_date"
-            defaultValue="2026-09-20"
+        <label className="flex items-center gap-2 text-xs text-[color:var(--color-muted)] mb-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={flexible}
+            onChange={(e) => setFlexible(e.target.checked)}
           />
-          <LabeledInput
-            type="date"
-            label="End"
-            name="end_date"
-            defaultValue="2026-09-27"
-          />
-        </div>
+          Flexible — any week within a wider window
+        </label>
+        {flexible ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <LabeledInput
+                type="date"
+                label="Earliest arrival"
+                name="window_start"
+                defaultValue="2026-09-15"
+              />
+              <LabeledInput
+                type="date"
+                label="Latest departure"
+                name="window_end"
+                defaultValue="2026-10-15"
+              />
+            </div>
+            <LabeledInput
+              type="number"
+              label="How many nights?"
+              name="duration_nights"
+              defaultValue="7"
+              min={1}
+              max={30}
+            />
+            <p className="text-xs text-[color:var(--color-muted)]">
+              We&apos;ll rank destinations across the whole window; the concrete
+              week defaults to the window start and is editable on the trip page.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <LabeledInput
+              type="date"
+              label="Start"
+              name="start_date"
+              defaultValue="2026-09-20"
+            />
+            <LabeledInput
+              type="date"
+              label="End"
+              name="end_date"
+              defaultValue="2026-09-27"
+            />
+          </div>
+        )}
       </Section>
 
       {/* Group */}
@@ -234,17 +287,45 @@ export function IntermediateSurvey({ deep }: { deep?: boolean }) {
         </div>
       </Section>
 
-      {/* Budget */}
-      <Section title="Budget">
-        <LabeledInput
-          type="number"
-          label="Per person (USD)"
-          name="budget_per_person"
-          defaultValue="1500"
-          min={100}
-          step={50}
-        />
-        <div className="mt-3 flex flex-wrap gap-2">
+      {/* Budget — range */}
+      <Section title="Budget range per person (USD)">
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <label className="block">
+            <span className="text-xs text-[color:var(--color-muted)] mb-1 block">
+              Minimum
+            </span>
+            <input
+              type="number"
+              value={budgetMin}
+              onChange={(e) =>
+                setBudgetMin(Math.max(100, Number(e.target.value) || 0))
+              }
+              min={100}
+              step={50}
+              className="field"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-[color:var(--color-muted)] mb-1 block">
+              Maximum
+            </span>
+            <input
+              type="number"
+              value={budgetMax}
+              onChange={(e) =>
+                setBudgetMax(Math.max(budgetMin, Number(e.target.value) || 0))
+              }
+              min={budgetMin}
+              step={50}
+              className="field"
+            />
+          </label>
+        </div>
+        <p className="text-xs text-[color:var(--color-muted)] mb-3">
+          Compare shows what each end enables per destination — hotel tier,
+          activity depth, direct-vs-connecting flights.
+        </p>
+        <div className="flex flex-wrap gap-2">
           {COMFORT_LEVELS.map((c) => (
             <Chip
               key={c.value}

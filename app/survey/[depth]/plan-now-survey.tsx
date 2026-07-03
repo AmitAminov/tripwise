@@ -24,10 +24,16 @@ const selectedCard =
 const unselectedCard =
   "bg-[color:var(--color-surface)] text-[color:var(--color-fg)] border-[color:var(--color-line)] hover:border-[color:var(--color-line-2)]";
 
-export function PlanNowSurvey() {
-  const [candidates, setCandidates] = useState<string[]>(
-    DESTINATIONS.map((d) => d.id),
-  );
+export function PlanNowSurvey({
+  presetDestination,
+}: {
+  presetDestination?: string | null;
+} = {}) {
+  const initialCandidates =
+    presetDestination && DESTINATIONS.some((d) => d.id === presetDestination)
+      ? [presetDestination]
+      : DESTINATIONS.map((d) => d.id);
+  const [candidates, setCandidates] = useState<string[]>(initialCandidates);
   const [interests, setInterests] = useState<string[]>([
     "food",
     "culture",
@@ -35,6 +41,9 @@ export function PlanNowSurvey() {
   ]);
   const [comfort, setComfort] = useState<string>("standard");
   const [pace, setPace] = useState<string>("balanced");
+  const [flexible, setFlexible] = useState<boolean>(false);
+  const [budgetMin, setBudgetMin] = useState<number>(1000);
+  const [budgetMax, setBudgetMax] = useState<number>(2500);
   const [pending, startTransition] = useTransition();
 
   function toggle(list: string[], set: (v: string[]) => void, id: string) {
@@ -46,6 +55,9 @@ export function PlanNowSurvey() {
     interests.forEach((i) => formData.append("interests", i));
     formData.set("comfort", comfort);
     formData.set("pace", pace);
+    formData.set("date_mode", flexible ? "flexible_month" : "exact_dates");
+    formData.set("budget_per_person_min", String(budgetMin));
+    formData.set("budget_per_person_max", String(budgetMax));
     formData.set("planning_depth", "plan_now");
     startTransition(() => submitPlanNow(formData));
   }
@@ -90,35 +102,91 @@ export function PlanNowSurvey() {
 
       {/* Dates */}
       <fieldset>
-        <legend className="field-label mb-2">When?</legend>
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-xs text-[color:var(--color-muted)] mb-1 block">
-              Start
-            </span>
+        <div className="flex items-center justify-between mb-2 gap-3">
+          <legend className="field-label">When?</legend>
+          <label className="flex items-center gap-2 text-xs text-[color:var(--color-muted)] cursor-pointer">
             <input
-              type="date"
-              name="start_date"
-              defaultValue="2026-09-20"
-              min="2026-09-01"
-              max="2026-11-30"
-              className="field"
+              type="checkbox"
+              checked={flexible}
+              onChange={(e) => setFlexible(e.target.checked)}
             />
-          </label>
-          <label className="block">
-            <span className="text-xs text-[color:var(--color-muted)] mb-1 block">
-              End
-            </span>
-            <input
-              type="date"
-              name="end_date"
-              defaultValue="2026-09-27"
-              min="2026-09-01"
-              max="2026-11-30"
-              className="field"
-            />
+            Flexible — any week in a window
           </label>
         </div>
+        {flexible ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs text-[color:var(--color-muted)] mb-1 block">
+                  Earliest arrival
+                </span>
+                <input
+                  type="date"
+                  name="window_start"
+                  defaultValue="2026-09-15"
+                  className="field"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs text-[color:var(--color-muted)] mb-1 block">
+                  Latest departure
+                </span>
+                <input
+                  type="date"
+                  name="window_end"
+                  defaultValue="2026-10-15"
+                  className="field"
+                />
+              </label>
+            </div>
+            <label className="block max-w-[240px]">
+              <span className="text-xs text-[color:var(--color-muted)] mb-1 block">
+                How many nights?
+              </span>
+              <input
+                type="number"
+                name="duration_nights"
+                defaultValue={7}
+                min={1}
+                max={30}
+                className="field"
+              />
+            </label>
+            <p className="text-xs text-[color:var(--color-muted)]">
+              We&apos;ll rank destinations using the window; the concrete week
+              defaults to the window start and you can shift it on the trip page.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs text-[color:var(--color-muted)] mb-1 block">
+                Start
+              </span>
+              <input
+                type="date"
+                name="start_date"
+                defaultValue="2026-09-20"
+                min="2026-09-01"
+                max="2026-11-30"
+                className="field"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs text-[color:var(--color-muted)] mb-1 block">
+                End
+              </span>
+              <input
+                type="date"
+                name="end_date"
+                defaultValue="2026-09-27"
+                min="2026-09-01"
+                max="2026-11-30"
+                className="field"
+              />
+            </label>
+          </div>
+        )}
       </fieldset>
 
       {/* Travelers */}
@@ -154,17 +222,47 @@ export function PlanNowSurvey() {
         </div>
       </fieldset>
 
-      {/* Budget */}
+      {/* Budget — range */}
       <fieldset>
-        <legend className="field-label mb-2">Budget per person (USD)</legend>
-        <input
-          type="number"
-          name="budget_per_person"
-          defaultValue={1500}
-          min={100}
-          step={50}
-          className="field mb-3"
-        />
+        <legend className="field-label mb-2">
+          Budget range per person (USD)
+        </legend>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <label className="block">
+            <span className="text-xs text-[color:var(--color-muted)] mb-1 block">
+              Minimum
+            </span>
+            <input
+              type="number"
+              value={budgetMin}
+              onChange={(e) =>
+                setBudgetMin(Math.max(100, Number(e.target.value) || 0))
+              }
+              min={100}
+              step={50}
+              className="field"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-[color:var(--color-muted)] mb-1 block">
+              Maximum
+            </span>
+            <input
+              type="number"
+              value={budgetMax}
+              onChange={(e) =>
+                setBudgetMax(Math.max(budgetMin, Number(e.target.value) || 0))
+              }
+              min={budgetMin}
+              step={50}
+              className="field"
+            />
+          </label>
+        </div>
+        <p className="text-xs text-[color:var(--color-muted)] mb-3">
+          On the compare page you&apos;ll see what each end enables — hotel
+          tier, activity depth, direct-vs-connecting flights, restaurant tier.
+        </p>
         <div className="flex flex-wrap gap-2">
           {COMFORT_LEVELS.map((c) => {
             const on = comfort === c.value;

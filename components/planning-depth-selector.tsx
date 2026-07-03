@@ -38,11 +38,10 @@ const OPTIONS: DepthOption[] = [
     ],
     accent: "var(--color-accent)",
     href: "/survey/intermediate",
-    recommended: true,
   },
   {
     depth: "deep_research",
-    title: "Deep Research",
+    title: "Deep Planning",
     tagline: "For the trip that has to be right.",
     timeEstimate: "25+ minutes · 25+ questions",
     bullets: [
@@ -52,6 +51,7 @@ const OPTIONS: DepthOption[] = [
     ],
     accent: "var(--color-primary)",
     href: "/survey/deep_research",
+    recommended: true,
   },
 ];
 

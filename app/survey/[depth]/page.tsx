@@ -27,7 +27,7 @@ const DEPTH_META: Record<PlanningDepth, { title: string; subtitle: string }> = {
       "12–18 questions. Live flight search, events, lodging estimates, day-by-day plan.",
   },
   deep_research: {
-    title: "Deep Research",
+    title: "Deep Planning",
     subtitle:
       "25+ questions. Preference matching, alternatives, visa/logistics, decision report.",
   },
@@ -35,11 +35,15 @@ const DEPTH_META: Record<PlanningDepth, { title: string; subtitle: string }> = {
 
 export default async function SurveyPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ depth: string }>;
+  searchParams: Promise<{ destination?: string }>;
 }) {
   const { depth } = await params;
   if (!isDepth(depth)) notFound();
+  const sp = await searchParams;
+  const presetDestination = sp?.destination ?? null;
 
   const supabase = await createClient();
   const {
@@ -70,9 +74,15 @@ export default async function SurveyPage({
           <p className="text-[color:var(--color-fg-2)]">{meta.subtitle}</p>
         </div>
 
-        {depth === "plan_now" && <PlanNowSurvey />}
-        {depth === "intermediate" && <IntermediateSurvey />}
-        {depth === "deep_research" && <IntermediateSurvey deep />}
+        {depth === "plan_now" && (
+          <PlanNowSurvey presetDestination={presetDestination} />
+        )}
+        {depth === "intermediate" && (
+          <IntermediateSurvey presetDestination={presetDestination} />
+        )}
+        {depth === "deep_research" && (
+          <IntermediateSurvey deep presetDestination={presetDestination} />
+        )}
       </main>
     </>
   );

@@ -58,6 +58,9 @@ export interface Travelers {
 export interface Budget {
   total?: number;
   perPerson?: number;
+  /** Optional range mode: user gives min/max per person; UI shows what each end enables. */
+  perPersonMin?: number;
+  perPersonMax?: number;
   strictness: BudgetStrictness;
   comfortLevel: ComfortLevel;
 }
@@ -91,8 +94,11 @@ export interface TripIntent {
   preferredCurrency: string;
   preferredLanguage: string;
   dateMode: DateMode;
-  startDate?: string; // ISO YYYY-MM-DD
-  endDate?: string; // ISO YYYY-MM-DD
+  startDate?: string; // ISO YYYY-MM-DD — concrete trip start (when known)
+  endDate?: string; // ISO YYYY-MM-DD — concrete trip end (when known)
+  /** Outer window for a flexible-week search (e.g. "any week between Sep 15 and Oct 15"). */
+  windowStart?: string;
+  windowEnd?: string;
   durationDays?: number;
   travelers: Travelers;
   budget: Budget;

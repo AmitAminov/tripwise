@@ -66,12 +66,34 @@ export async function submitPlanNow(formData: FormData): Promise<void> {
   intent.homeAirport =
     readString(formData, "home_airport") ?? intent.homeAirport;
 
-  // Dates
+  // Dates — either exact_dates (start_date + end_date) or a flexible window
+  // (window_start + window_end + duration_nights). The UI toggles between modes.
+  const dateModeInput = readString(formData, "date_mode");
+  const flexible = dateModeInput === "flexible_month";
+  const windowStart = readString(formData, "window_start");
+  const windowEnd = readString(formData, "window_end");
+  const durationNights = safeNumber(formData.get("duration_nights"), 0);
   const startDate = readString(formData, "start_date");
   const endDate = readString(formData, "end_date");
-  if (startDate) intent.startDate = startDate;
-  if (endDate) intent.endDate = endDate;
-  intent.dateMode = startDate && endDate ? "exact_dates" : "flexible_month";
+
+  if (flexible && windowStart && windowEnd) {
+    intent.windowStart = windowStart;
+    intent.windowEnd = windowEnd;
+    if (durationNights > 0) intent.durationDays = durationNights;
+    // Default a concrete slice at the window start so downstream code that
+    // wants a single trip week can proceed.
+    intent.startDate = windowStart;
+    if (durationNights > 0) {
+      const d = new Date(windowStart);
+      d.setUTCDate(d.getUTCDate() + durationNights);
+      intent.endDate = d.toISOString().slice(0, 10);
+    }
+    intent.dateMode = "flexible_month";
+  } else {
+    if (startDate) intent.startDate = startDate;
+    if (endDate) intent.endDate = endDate;
+    intent.dateMode = startDate && endDate ? "exact_dates" : "flexible_month";
+  }
 
   // Travelers
   intent.travelers.adults = Math.max(
@@ -89,9 +111,18 @@ export async function submitPlanNow(formData: FormData): Promise<void> {
   const group = asGroup(readString(formData, "group_type"));
   if (group) intent.travelers.groupType = group;
 
-  // Budget
+  // Budget — single value OR a range. When range is present, perPerson defaults
+  // to the midpoint so downstream scoring/ranking still has a point estimate.
   const perPerson = safeNumber(formData.get("budget_per_person"), 0);
-  if (perPerson > 0) intent.budget.perPerson = perPerson;
+  const perPersonMin = safeNumber(formData.get("budget_per_person_min"), 0);
+  const perPersonMax = safeNumber(formData.get("budget_per_person_max"), 0);
+  if (perPersonMin > 0 && perPersonMax > 0 && perPersonMax >= perPersonMin) {
+    intent.budget.perPersonMin = perPersonMin;
+    intent.budget.perPersonMax = perPersonMax;
+    intent.budget.perPerson = Math.round((perPersonMin + perPersonMax) / 2);
+  } else if (perPerson > 0) {
+    intent.budget.perPerson = perPerson;
+  }
   const comfort = readString(formData, "comfort");
   if (comfort === "budget" || comfort === "standard" || comfort === "premium" || comfort === "luxury") {
     intent.budget.comfortLevel = comfort as ComfortLevel;

@@ -87,18 +87,31 @@ export default async function ComparePage({
     data: { user },
   } = await supabase.auth.getUser();
 
+  // When intent has explicit candidateDestinations, honor them. Otherwise
+  // rank the entire library so the survey can genuinely pick winners from
+  // the whole 50-city set.
   const candidateIds = intent?.candidateDestinations;
   const filtered =
     candidateIds && candidateIds.length > 0
       ? DESTINATIONS.filter((d) => candidateIds.includes(d.id))
       : DESTINATIONS;
 
-  const ranked: RankedDestination[] | null = intent
+  const TOP_N = 5;
+  const rankedAll: RankedDestination[] | null = intent
     ? rankDestinations(filtered, intent)
     : null;
+  const ranked = rankedAll ? rankedAll.slice(0, TOP_N) : null;
+  // For the compare TABLE we show the same top-5 to keep it scannable.
+  // Without an intent, cap the un-ranked table at the first 5 seeds.
   const displayed: DestinationCard[] = ranked
     ? ranked.map((r) => r.destination)
-    : filtered;
+    : filtered.slice(0, TOP_N);
+
+  // Budget range implication strip: only render when the user gave a range.
+  const bMin = intent?.budget.perPersonMin;
+  const bMax = intent?.budget.perPersonMax;
+  const hasBudgetRange =
+    typeof bMin === "number" && typeof bMax === "number" && bMax > bMin;
 
   return (
     <>
@@ -133,13 +146,29 @@ export default async function ComparePage({
           )}
         </p>
 
-        {/* Ranked pills — only when we have an intent */}
+        {/* Ranked pills — top 5 when we have an intent */}
         {ranked && ranked.length > 0 && (
-          <div className="mb-8 grid gap-4 md:grid-cols-3">
-            {ranked.map((r, i) => (
-              <RankedCard key={r.destination.id} rank={i + 1} ranked={r} />
-            ))}
-          </div>
+          <>
+            <p className="text-sm text-[color:var(--color-muted)] mb-3">
+              Top {ranked.length} of {rankedAll?.length ?? 0} destinations
+              scored against your answers.
+            </p>
+            <div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {ranked.map((r, i) => (
+                <RankedCard
+                  key={r.destination.id}
+                  rank={i + 1}
+                  ranked={r}
+                  travelerAdults={intent?.travelers.adults ?? 2}
+                  budgetRange={
+                    hasBudgetRange
+                      ? { min: bMin as number, max: bMax as number }
+                      : null
+                  }
+                />
+              ))}
+            </div>
+          </>
         )}
 
         {/* Hero row (unranked mode) */}
@@ -242,9 +271,13 @@ export default async function ComparePage({
 function RankedCard({
   rank,
   ranked,
+  budgetRange,
+  travelerAdults,
 }: {
   rank: number;
   ranked: RankedDestination;
+  budgetRange: { min: number; max: number } | null;
+  travelerAdults: number;
 }) {
   const d = ranked.destination;
   const [c1, c2] = d.gradient;
@@ -304,7 +337,7 @@ function RankedCard({
           </ul>
         )}
         {ranked.concerns.length > 0 && (
-          <ul className="space-y-1 text-sm text-[color:var(--color-muted)]">
+          <ul className="space-y-1 text-sm text-[color:var(--color-muted)] mb-3">
             {ranked.concerns.slice(0, 2).map((r) => (
               <li key={r} className="flex gap-2">
                 <span className="text-[color:var(--color-warn)] mt-0.5 shrink-0">
@@ -315,6 +348,13 @@ function RankedCard({
             ))}
           </ul>
         )}
+        {budgetRange && (
+          <BudgetRangeStrip
+            destination={d}
+            range={budgetRange}
+            adults={travelerAdults}
+          />
+        )}
         <div className="mt-4 flex gap-2">
           <Link
             href={`/destinations/${ranked.destination.id}`}
@@ -322,6 +362,123 @@ function RankedCard({
           >
             Detail →
           </Link>
+          <Link
+            href={`/survey/deep_research?destination=${encodeURIComponent(d.id)}`}
+            className="btn btn-ghost text-xs px-3 py-1.5"
+          >
+            Plan a trip here →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Compact "what each end of your budget enables" strip. Uses the seed
+ * cost expectations as anchors:
+ *   - Low end: 1-2 stars, hostels/guesthouses, mostly free attractions,
+ *     street food, connecting flights.
+ *   - High end: 4-5 star hotels, guided experiences, fine dining, direct
+ *     flights (when the destination has any).
+ *
+ * The numbers are the total trip budget (per-person × adults) and how they
+ * relate to the destination's `totalEstimate.expected` at standard comfort.
+ */
+function BudgetRangeStrip({
+  destination,
+  range,
+  adults,
+}: {
+  destination: DestinationCard;
+  range: { min: number; max: number };
+  adults: number;
+}) {
+  const trip = destination.totalEstimate; // standard comfort baseline
+  const lowTotal = range.min * Math.max(1, adults);
+  const highTotal = range.max * Math.max(1, adults);
+  const lowRatio = lowTotal / trip.expected;
+  const highRatio = highTotal / trip.expected;
+
+  function tier(ratio: number): {
+    label: string;
+    bullets: string[];
+    tone: "warn" | "ok" | "good";
+  } {
+    if (ratio < 0.75) {
+      return {
+        label: "Backpacker",
+        tone: "warn",
+        bullets: [
+          "Hostels / guesthouses only",
+          "Street food + supermarket",
+          "Connecting or budget-carrier flights",
+        ],
+      };
+    }
+    if (ratio < 1.05) {
+      return {
+        label: "Standard",
+        tone: "ok",
+        bullets: [
+          "3-star hotels or well-rated Airbnb",
+          "Mid-range restaurants + some splurges",
+          destination.flightFromTLV.directAvailable
+            ? "Direct flights on regular carriers"
+            : "Connecting flight with one stop",
+        ],
+      };
+    }
+    if (ratio < 1.5) {
+      return {
+        label: "Comfortable",
+        tone: "good",
+        bullets: [
+          "4-star hotels, central location",
+          "Fine-dining nights + drivers",
+          "Direct flight, extras like priority seat",
+        ],
+      };
+    }
+    return {
+      label: "Premium",
+      tone: "good",
+      bullets: [
+        "5-star or boutique / villa",
+        "Michelin-quality + private guides",
+        "Premium cabin on direct flight",
+      ],
+    };
+  }
+
+  const low = tier(lowRatio);
+  const high = tier(highRatio);
+
+  return (
+    <div className="mt-3 rounded-md border border-[color:var(--color-line)] bg-[color:var(--color-surface-2)] p-3 text-xs">
+      <div className="uppercase tracking-widest text-[10px] text-[color:var(--color-muted)] mb-2">
+        What each end of your budget buys
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <div className="font-medium mb-1">
+            ${range.min.toLocaleString()} pp — {low.label}
+          </div>
+          <ul className="space-y-0.5 text-[color:var(--color-fg-2)]">
+            {low.bullets.map((b) => (
+              <li key={b}>· {b}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <div className="font-medium mb-1">
+            ${range.max.toLocaleString()} pp — {high.label}
+          </div>
+          <ul className="space-y-0.5 text-[color:var(--color-fg-2)]">
+            {high.bullets.map((b) => (
+              <li key={b}>· {b}</li>
+            ))}
+          </ul>
         </div>
       </div>
     </div>

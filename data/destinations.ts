@@ -486,18 +486,209 @@ const HAND_TUNED: DestinationCard[] = SEEDS.map((seed) => {
 });
 
 /**
- * Public list. Hand-tuned entries first (they own their airport heroes
- * and richer copy); everything else is expanded from the compact BULK spec.
+ * City-level destinations. Hand-tuned entries first (they own their airport
+ * heroes and richer copy); everything else is expanded from BULK.
  */
-export const DESTINATIONS: DestinationCard[] = [
+const CITY_DESTINATIONS: DestinationCard[] = [
   ...HAND_TUNED,
   ...buildBulkSeeds(),
 ];
 
 /**
+ * Aggregate a country's cities into one "{Country}-Wide" entry so users can
+ * pick a broad regional trip instead of committing to a single city.
+ * Deliberately uses averages + adds a small multi-city overhead to lodging
+ * and transport so the numbers reflect the reality of moving around.
+ */
+function buildCountryWideSeeds(cards: DestinationCard[]): DestinationCard[] {
+  const byCountry = new Map<string, DestinationCard[]>();
+  for (const c of cards) {
+    const arr = byCountry.get(c.country) ?? [];
+    arr.push(c);
+    byCountry.set(c.country, arr);
+  }
+  const results: DestinationCard[] = [];
+  const worseVisa = (
+    a: DestinationSeed["visa"]["forIsraeliPassport"],
+    b: DestinationSeed["visa"]["forIsraeliPassport"],
+  ) => {
+    const order = {
+      visa_free: 0,
+      visa_on_arrival: 1,
+      e_visa: 2,
+      check: 2,
+      consular_required: 3,
+    } as const;
+    return order[a] >= order[b] ? a : b;
+  };
+  const worseSafety = (
+    a: DestinationSeed["safety"]["level"],
+    b: DestinationSeed["safety"]["level"],
+  ) => {
+    const order = { very_safe: 0, safe: 1, moderate: 2, caution: 3 } as const;
+    return order[a] >= order[b] ? a : b;
+  };
+
+  for (const [country, group] of byCountry) {
+    const anchor = group[0];
+    const n = group.length;
+    const avgLat = group.reduce((s, c) => s + c.coords.lat, 0) / n;
+    const avgLng = group.reduce((s, c) => s + c.coords.lng, 0) / n;
+    const interests = Array.from(new Set(group.flatMap((c) => c.interestSignals)));
+    const tempMinC = Math.round(group.reduce((s, c) => s + c.climate.tempMinC, 0) / n);
+    const tempMaxC = Math.round(group.reduce((s, c) => s + c.climate.tempMaxC, 0) / n);
+    const rainDaysExpected = Math.round(
+      group.reduce((s, c) => s + c.climate.rainDaysExpected, 0) / n,
+    );
+    const flightHours =
+      Math.round((group.reduce((s, c) => s + c.flightFromTLV.typicalDurationHours, 0) / n) * 10) /
+      10;
+    const anyDirect = group.some((c) => c.flightFromTLV.directAvailable);
+    const worstVisa = group.reduce(
+      (w, c) => worseVisa(w, c.visa.forIsraeliPassport),
+      "visa_free" as DestinationSeed["visa"]["forIsraeliPassport"],
+    );
+    const worstSafety = group.reduce(
+      (w, c) => worseSafety(w, c.safety.level),
+      "very_safe" as DestinationSeed["safety"]["level"],
+    );
+
+    const id = country
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "") + "_wide";
+    const name = `${country}-Wide`;
+
+    // Cost: average city expected + ~10% multi-city overhead (extra hotel
+    // switches, intercity transport, buffer for time lost in transit).
+    const avgExpected =
+      group.reduce((s, c) => s + c.totalEstimate.expected, 0) / n;
+    const avgMin = group.reduce((s, c) => s + c.totalEstimate.min, 0) / n;
+    const avgMax = group.reduce((s, c) => s + c.totalEstimate.max, 0) / n;
+    const overheadX = 1.1;
+
+    const seed: DestinationSeed = {
+      id,
+      name,
+      country,
+      region: anchor.region,
+      airport: anchor.airport,
+      timezone: anchor.timezone,
+      coords: { lat: avgLat, lng: avgLng },
+      vibe: `Explore ${country} beyond a single city.`,
+      tagline:
+        n > 1
+          ? `Combine ${Math.min(n, 3)}-city loop across ${country} — a fuller take than any single stop.`
+          : `Explore ${country} beyond ${anchor.name} — pair the anchor city with regional side trips.`,
+      interestSignals: interests,
+      bestFor: [
+        `Multi-city trip in ${country}`,
+        "Slower-paced regional exploration",
+        "First-time visitors who want breadth",
+      ],
+      climate: {
+        seasonNote: `Country averages across cities; individual regions vary.`,
+        tempMinC,
+        tempMaxC,
+        rainDaysExpected,
+      },
+      visa: {
+        forIsraeliPassport: worstVisa,
+        note: `Same rules apply as for individual ${country} cities.`,
+      },
+      safety: {
+        level: worstSafety,
+        note: `Varies by area; typical urban vigilance in cities, more relaxed elsewhere.`,
+      },
+      flightFromTLV: {
+        directAvailable: anyDirect,
+        typicalDurationHours: flightHours,
+        typicalStops: anyDirect ? 0 : 1,
+      },
+      gradient: anchor.gradient,
+      hasHero: false,
+    };
+
+    // Simple aggregate estimates so budget strip and totals still work.
+    const estimates: PriceEstimate[] = [
+      {
+        component: `Flights (2 pax, r/t${anyDirect ? ", direct" : ""})`,
+        ...spread(Math.round((avgExpected * 0.28))),
+        currency: "USD",
+        confidence: "low",
+        status: "estimated",
+        source: "internal_country_aggregate_v1",
+        checkedAt: ISO_NOW,
+      },
+      {
+        component: "Lodging (7 nts, 2-3 stops)",
+        ...spread(Math.round((avgExpected * 0.32) * overheadX)),
+        currency: "USD",
+        confidence: "low",
+        status: "estimated",
+        source: "internal_country_aggregate_v1",
+        checkedAt: ISO_NOW,
+      },
+      {
+        component: "Food (14 pax-days)",
+        ...spread(Math.round(avgExpected * 0.18)),
+        currency: "USD",
+        confidence: "low",
+        status: "estimated",
+        source: "internal_country_aggregate_v1",
+        checkedAt: ISO_NOW,
+      },
+      {
+        component: "Intercity + local transport",
+        ...spread(Math.round(avgExpected * 0.09 * 1.5)),
+        currency: "USD",
+        confidence: "low",
+        status: "estimated",
+        source: "internal_country_aggregate_v1",
+        checkedAt: ISO_NOW,
+      },
+      {
+        component: "Activities",
+        ...spread(Math.round(avgExpected * 0.08)),
+        currency: "USD",
+        confidence: "low",
+        status: "estimated",
+        source: "internal_country_aggregate_v1",
+        checkedAt: ISO_NOW,
+      },
+    ];
+
+    results.push({
+      ...seed,
+      estimates,
+      totalEstimate: {
+        min: Math.round(avgMin * overheadX),
+        expected: Math.round(avgExpected * overheadX),
+        max: Math.round(avgMax * overheadX),
+        currency: "USD",
+      },
+    });
+  }
+  return results.sort((a, b) => a.country.localeCompare(b.country));
+}
+
+/**
+ * Public catalog: city-level destinations + one "{Country}-Wide" aggregate
+ * per country so users can compare a broad country trip against a single-
+ * city trip head-to-head. Country-wide entries come from averaged data.
+ */
+export const COUNTRY_WIDE_DESTINATIONS: DestinationCard[] =
+  buildCountryWideSeeds(CITY_DESTINATIONS);
+
+export const DESTINATIONS: DestinationCard[] = [
+  ...CITY_DESTINATIONS,
+  ...COUNTRY_WIDE_DESTINATIONS,
+];
+
+/**
  * Featured set for the homepage: only the hand-tuned entries with real
- * hero photos + curated copy. The full 50-destination catalog lives on
- * /compare — the home page is a poster, not a listing.
+ * hero photos + curated copy. The full catalog lives on /compare — the
+ * home page is a poster, not a listing.
  */
 export const FEATURED_DESTINATIONS: DestinationCard[] = HAND_TUNED;
 

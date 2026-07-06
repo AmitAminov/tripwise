@@ -2,11 +2,17 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
-import { placesProvider } from "@/lib/providers";
+import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { MapView, type MapPin } from "./map-view";
 import { KindsPicker } from "./kinds-picker";
-import { PICKABLE_KINDS, PLURAL_TO_PIN, type PickableKind } from "./kinds";
+import {
+  PICKABLE_KINDS,
+  PLURAL_TO_PIN,
+  PLACES_KINDS,
+  type PickableKind,
+  type PlacesKind,
+} from "./kinds";
 
 function parseKinds(raw: string | string[] | undefined): PickableKind[] {
   const value = Array.isArray(raw) ? raw[0] : raw;
@@ -56,26 +62,51 @@ export default async function TripMapPage({
     ? { name: resolved.name, lat: resolved.coords.lat, lng: resolved.coords.lng }
     : null;
 
-  // Enrich pins: for items without coords, look up nearby Places.
+  // Providers: Places is coord-keyed, events is city + date-window keyed.
   const provider = placesProvider();
+  const eProvider = eventsProvider();
 
-  // Fetch each selected category in parallel; pin the results with their
-  // singular MapPin kind so the MapView can color and filter them.
+  // Fetch each selected category in parallel:
+  //  - place kinds hit Google Places at the center/radius
+  //  - "events" hits the events provider for the trip's date window
   let contextPins: MapPin[] = [];
   const kindErrors: Array<{ kind: PickableKind; error: string }> = [];
-  if (provider && center) {
-    const results = await Promise.all(
-      selectedKinds.map(async (kind) => {
-        const res = await provider.search({
-          center: { lat: center.lat, lng: center.lng },
-          kind,
-          radiusMeters: 4000,
-          limit: 12,
-        });
-        return { kind, res };
-      }),
-    );
-    for (const { kind, res } of results) {
+  const placesKinds = selectedKinds.filter((k): k is PlacesKind =>
+    (PLACES_KINDS as readonly string[]).includes(k),
+  );
+  const wantEvents = selectedKinds.includes("events");
+
+  if (center) {
+    const tripFromIso = trip.start_date
+      ? `${trip.start_date}T00:00:00Z`
+      : null;
+    const tripToIso = trip.end_date ? `${trip.end_date}T23:59:59Z` : null;
+
+    const [placeResults, eventsRes] = await Promise.all([
+      provider
+        ? Promise.all(
+            placesKinds.map(async (kind) => {
+              const res = await provider.search({
+                center: { lat: center.lat, lng: center.lng },
+                kind,
+                radiusMeters: 4000,
+                limit: 12,
+              });
+              return { kind, res };
+            }),
+          )
+        : Promise.resolve([] as Array<{ kind: PlacesKind; res: never }>),
+      wantEvents && eProvider && tripFromIso && tripToIso
+        ? eProvider.search({
+            city: trip.destination ?? trip.name,
+            from: tripFromIso,
+            to: tripToIso,
+            limit: 30,
+          })
+        : Promise.resolve(null),
+    ]);
+
+    for (const { kind, res } of placeResults) {
       if (res.data) {
         const pinKind = PLURAL_TO_PIN[kind];
         for (const p of res.data) {
@@ -95,6 +126,27 @@ export default async function TripMapPage({
         kindErrors.push({ kind, error: res.error });
       }
     }
+
+    if (eventsRes) {
+      if (eventsRes.data) {
+        for (const ev of eventsRes.data) {
+          if (!ev.coords) continue;
+          const day = ev.startAt.slice(0, 10);
+          const time = ev.startAt.slice(11, 16);
+          contextPins.push({
+            id: `event:${ev.id}`,
+            title: ev.name,
+            lat: ev.coords.lat,
+            lng: ev.coords.lng,
+            kind: "event" as const,
+            subtitle: `${day} ${time}${ev.venueName ? " · " + ev.venueName : ""}`,
+          });
+        }
+      } else if (eventsRes.error) {
+        kindErrors.push({ kind: "events", error: eventsRes.error });
+      }
+    }
+
     // Dedupe by id (a place could match multiple kinds).
     const seen = new Set<string>();
     contextPins = contextPins.filter((p) => {

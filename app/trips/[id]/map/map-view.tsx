@@ -13,18 +13,26 @@ export type MapPin = {
   | { kind: "restaurant" }
   | { kind: "cafe" }
   | { kind: "bar" }
+  | { kind: "event" }
   | { kind: "plan"; dayIndex: number }
 );
 
-type ContextKind = "attraction" | "restaurant" | "cafe" | "bar";
+type ContextKind = "attraction" | "restaurant" | "cafe" | "bar" | "event";
 
-const CONTEXT_KINDS: ContextKind[] = ["attraction", "restaurant", "cafe", "bar"];
+const CONTEXT_KINDS: ContextKind[] = [
+  "attraction",
+  "restaurant",
+  "cafe",
+  "bar",
+  "event",
+];
 
 const KIND_COLOR: Record<ContextKind | "plan", string> = {
   attraction: "#c9a961",
   restaurant: "#d97757",
   cafe: "#8b6f47",
   bar: "#7a4b8a",
+  event: "#3a5f9e",
   plan: "#2d5f4e",
 };
 
@@ -33,19 +41,21 @@ const KIND_LABEL: Record<ContextKind, string> = {
   restaurant: "Restaurants",
   cafe: "Cafés",
   bar: "Bars",
+  event: "Events",
 };
 
-// Types are declared globally in types/google.d.ts.
-type GMap = NonNullable<
-  NonNullable<Window["google"]>["maps"]
-> extends { Map: new (...args: never[]) => infer M }
-  ? M
-  : never;
-type GMarker = NonNullable<
-  NonNullable<Window["google"]>["maps"]
-> extends { Marker: new (...args: never[]) => infer M }
-  ? M
-  : never;
+// Types are declared globally in types/google.d.ts. Because the maps
+// constructors are optional (`Map?:`) while the SDK lazy-loads them via
+// importLibrary(), we peel `NonNullable` off before extracting the return
+// type — otherwise the conditional infer resolves to `never`.
+type GMapCtor = NonNullable<
+  NonNullable<NonNullable<Window["google"]>["maps"]>["Map"]
+>;
+type GMarkerCtor = NonNullable<
+  NonNullable<NonNullable<Window["google"]>["maps"]>["Marker"]
+>;
+type GMap = InstanceType<GMapCtor>;
+type GMarker = InstanceType<GMarkerCtor>;
 type GLatLngBounds = {
   extend: (p: { lat: number; lng: number }) => void;
 };
@@ -107,38 +117,89 @@ export function MapView({
   }, [presentKindsKey]);
 
   // Load Maps JS SDK once.
+  //
+  // The bootstrap uses `loading=async`, which is Google's recommended path
+  // but ALSO means constructors like `Map`, `Marker`, and `LatLngBounds`
+  // aren't populated when `script.onload` fires — you must call
+  // `google.maps.importLibrary("<name>")` and await the result before
+  // using the class. Skipping this step is what produced
+  // `window.google.maps.Map is not a constructor`.
   useEffect(() => {
-    if (window.google?.maps?.Map) {
-      setReady(true);
-      return;
+    let cancelled = false;
+
+    const bootstrapLibs = async () => {
+      const gmaps = window.google?.maps;
+      if (!gmaps?.importLibrary) return;
+      try {
+        await Promise.all([
+          gmaps.importLibrary("maps"),
+          gmaps.importLibrary("marker"),
+        ]);
+        if (!cancelled) setReady(true);
+      } catch (e) {
+        if (!cancelled) {
+          setLoadError(
+            e instanceof Error
+              ? `Maps library failed to load: ${e.message}`
+              : "Maps library failed to load.",
+          );
+        }
+      }
+    };
+
+    if (window.google?.maps?.importLibrary) {
+      // Bootstrap already present (another instance loaded it).
+      bootstrapLibs();
+      return () => {
+        cancelled = true;
+      };
     }
+
     const existing = document.querySelector<HTMLScriptElement>(
       "script[data-tripwise-maps]",
     );
     if (existing) {
-      existing.addEventListener("load", () => setReady(true));
+      existing.addEventListener("load", bootstrapLibs);
       existing.addEventListener("error", () =>
-        setLoadError("Failed to load Maps JS. Enable Maps JavaScript API on your Cloud project."),
+        setLoadError(
+          "Failed to load Maps JS. Enable Maps JavaScript API on your Cloud project.",
+        ),
       );
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
+
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&libraries=marker`;
     script.async = true;
     script.defer = true;
     script.setAttribute("data-tripwise-maps", "true");
-    script.onload = () => setReady(true);
+    script.onload = bootstrapLibs;
     script.onerror = () =>
-      setLoadError("Failed to load Maps JS. Enable Maps JavaScript API on your Cloud project.");
+      setLoadError(
+        "Failed to load Maps JS. Enable Maps JavaScript API on your Cloud project.",
+      );
     document.head.appendChild(script);
+
+    return () => {
+      cancelled = true;
+    };
   }, [apiKey]);
 
   // Instantiate map + markers whenever ready or filters change.
   useEffect(() => {
-    if (!ready || !mapRef.current || !window.google?.maps) return;
+    if (!ready || !mapRef.current) return;
+    const gmaps = window.google?.maps;
+    // Guard against every async race: even with `ready` set we still
+    // require the specific constructors we're about to call. Anything
+    // missing here → bail silently; the next effect run picks it up.
+    if (!gmaps?.Map || !gmaps.Marker || !gmaps.LatLngBounds || !gmaps.InfoWindow) {
+      return;
+    }
 
     if (!mapInstance.current) {
-      mapInstance.current = new window.google.maps.Map(mapRef.current, {
+      mapInstance.current = new gmaps.Map(mapRef.current, {
         center,
         zoom: 13,
         disableDefaultUI: false,
@@ -154,7 +215,6 @@ export function MapView({
     markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
 
-    const gmaps = window.google.maps;
     const infoWindow = new gmaps.InfoWindow();
 
     const filtered = pins.filter((p) => {
@@ -165,11 +225,7 @@ export function MapView({
       return filters.visibleKinds.has(p.kind);
     });
 
-    const bounds: GLatLngBounds = new (
-      window as unknown as {
-        google: { maps: { LatLngBounds: new () => GLatLngBounds } };
-      }
-    ).google.maps.LatLngBounds();
+    const bounds: GLatLngBounds = new gmaps.LatLngBounds();
 
     for (const pin of filtered) {
       const isPlan = pin.kind === "plan";
@@ -204,6 +260,15 @@ export function MapView({
     } else {
       mapInstance.current.setCenter(center);
     }
+
+    // Cleanup: when the effect re-runs (new pins/filters) or the component
+    // unmounts, detach the markers we created this pass. The next effect
+    // run also does its own detach at the top, but that only fires when
+    // the effect actually runs — cleanup covers the unmount case too.
+    const attached = markersRef.current;
+    return () => {
+      attached.forEach((m) => m.setMap(null));
+    };
   }, [ready, pins, filters, center]);
 
   return (

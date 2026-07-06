@@ -47,17 +47,23 @@ declare global {
         oauth2?: GoogleAccountsOauth2;
       };
       maps?: {
-        Map: new (
+        // Legacy sync-loaded constructors — present when the bootstrap
+        // hasn't yet lazy-loaded a library, so they must be optional.
+        Map?: new (
           el: HTMLElement,
           opts: Record<string, unknown>,
         ) => GoogleMapsMap;
-        Marker: new (opts: Record<string, unknown>) => GoogleMapsMarker;
-        InfoWindow: new (
+        Marker?: new (opts: Record<string, unknown>) => GoogleMapsMarker;
+        InfoWindow?: new (
           opts?: Record<string, unknown>,
         ) => GoogleMapsInfoWindow;
-        Size: new (w: number, h: number) => unknown;
+        Size?: new (w: number, h: number) => unknown;
         SymbolPath?: { CIRCLE: number };
-        LatLngBounds: new () => GoogleMapsLatLngBounds;
+        LatLngBounds?: new () => GoogleMapsLatLngBounds;
+        // Async-loading bootstrap (loading=async). Call this once per
+        // needed library; the constructors above light up after the
+        // returned promise resolves.
+        importLibrary?: (name: string) => Promise<unknown>;
       };
     };
   }

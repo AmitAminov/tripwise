@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { DestinationCard } from "@/data/destinations";
 import { formatUSD } from "@/lib/format";
+import { CountryFlag } from "@/components/country-flag";
 
 export function DestinationHeroCard({
   destination: d,
@@ -35,8 +36,11 @@ export function DestinationHeroCard({
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-5 text-white">
           <div className="font-serif text-2xl leading-tight">{d.name}</div>
-          <div className="text-sm opacity-90">
-            {d.country} · {d.airport}
+          <div className="text-sm opacity-90 flex items-center gap-1.5">
+            <CountryFlag country={d.country} size={18} />
+            <span>
+              {d.country} · {d.airport}
+            </span>
           </div>
         </div>
       </div>

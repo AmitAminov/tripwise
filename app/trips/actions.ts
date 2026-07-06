@@ -34,24 +34,57 @@ export async function createTrip(
     return { error: "End date can't be before start date." };
   }
 
-  const { data: trip, error } = await supabase
-    .from("trips")
-    .insert({
-      name,
-      destination,
-      start_date,
-      end_date,
-      created_by: user.id,
-    })
-    .select("id")
-    .single();
+  // Route through a security-definer RPC so the server derives auth.uid()
+  // itself. This sidesteps the "new row violates RLS policy" failure mode
+  // where the raw REST INSERT couldn't prove created_by = auth.uid().
+  // Requires migration 003_create_trip_rpc.sql to be applied.
+  const { data: rpcId, error: rpcError } = await supabase.rpc("create_trip", {
+    p_name: name,
+    p_destination: destination,
+    p_start_date: start_date,
+    p_end_date: end_date,
+  });
 
-  if (error || !trip) {
-    return { error: error?.message ?? "Failed to create trip." };
+  if (rpcError || !rpcId) {
+    // If the RPC isn't installed yet, fall back to the legacy direct insert
+    // so an un-migrated environment doesn't lock the user out entirely.
+    const rpcMissing = /function .*create_trip.* does not exist/i.test(
+      rpcError?.message ?? "",
+    );
+    if (!rpcMissing) {
+      return {
+        error:
+          rpcError?.message ??
+          "Failed to create trip. If this persists, apply the 003_create_trip_rpc migration.",
+      };
+    }
+
+    const { data: trip, error: insertError } = await supabase
+      .from("trips")
+      .insert({
+        name,
+        destination,
+        start_date,
+        end_date,
+        created_by: user.id,
+      })
+      .select("id")
+      .single();
+
+    if (insertError || !trip) {
+      return {
+        error:
+          insertError?.message ??
+          "Failed to create trip (RPC missing; direct INSERT also failed).",
+      };
+    }
+
+    revalidatePath("/trips");
+    redirect(`/trips/${trip.id}`);
   }
 
   revalidatePath("/trips");
-  redirect(`/trips/${trip.id}`);
+  redirect(`/trips/${rpcId as string}`);
 }
 
 export async function createInvite(tripId: string): Promise<string> {

@@ -8,9 +8,13 @@ const initialState: CreateTripState = {};
 export function NewTripForm({
   defaultName,
   defaultDestination,
+  defaultStart,
+  defaultEnd,
 }: {
   defaultName?: string;
   defaultDestination?: string;
+  defaultStart?: string;
+  defaultEnd?: string;
 }) {
   const [state, formAction, pending] = useActionState(createTrip, initialState);
 
@@ -44,11 +48,21 @@ export function NewTripForm({
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="field-label">Start date</span>
-          <input type="date" name="start_date" className="field" />
+          <input
+            type="date"
+            name="start_date"
+            defaultValue={defaultStart ?? ""}
+            className="field"
+          />
         </label>
         <label className="block">
           <span className="field-label">End date</span>
-          <input type="date" name="end_date" className="field" />
+          <input
+            type="date"
+            name="end_date"
+            defaultValue={defaultEnd ?? ""}
+            className="field"
+          />
         </label>
       </div>
 

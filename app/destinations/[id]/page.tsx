@@ -299,20 +299,24 @@ export default async function DestinationDetailPage({
               {user ? (
                 <>
                   <Link
-                    href={`/survey/deep_research?destination=${encodeURIComponent(d.id)}`}
+                    href={`/trips/new?destination=${encodeURIComponent(d.name)}&name=${encodeURIComponent(`${d.name} · Trip`)}`}
                     className="btn btn-primary w-full mt-5"
+                    title="Create a trip and jump into map, day plan, and calendar export"
                   >
-                    Plan a trip here →
+                    Start planning →
                   </Link>
                   <Link
-                    href={`/trips/new?destination=${encodeURIComponent(d.name)}`}
+                    href={`/survey/deep_research?destination=${encodeURIComponent(d.id)}`}
                     className="btn btn-ghost w-full mt-2 text-sm"
                   >
-                    Or just save to a trip
+                    Or answer the full survey first
                   </Link>
                 </>
               ) : (
-                <Link href="/login" className="btn btn-primary w-full mt-5">
+                <Link
+                  href={`/login?next=${encodeURIComponent(`/trips/new?destination=${d.name}`)}`}
+                  className="btn btn-primary w-full mt-5"
+                >
                   Sign in to plan a trip
                 </Link>
               )}

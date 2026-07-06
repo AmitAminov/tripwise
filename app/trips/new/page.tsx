@@ -16,10 +16,14 @@ export default async function NewTripPage({
   if (!user) redirect("/login");
 
   const sp = await searchParams;
-  const destinationParam = Array.isArray(sp.destination)
-    ? sp.destination[0]
-    : sp.destination;
-  const nameParam = Array.isArray(sp.name) ? sp.name[0] : sp.name;
+  const first = (v: string | string[] | undefined) =>
+    Array.isArray(v) ? v[0] : v;
+  const destinationParam = first(sp.destination);
+  const nameParam = first(sp.name);
+  const startParam = first(sp.start);
+  const endParam = first(sp.end);
+  const iso = (s: string | undefined) =>
+    s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : undefined;
 
   return (
     <>
@@ -37,6 +41,8 @@ export default async function NewTripPage({
         <NewTripForm
           defaultName={nameParam}
           defaultDestination={destinationParam}
+          defaultStart={iso(startParam)}
+          defaultEnd={iso(endParam)}
         />
       </main>
     </>

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { submitPlanNow } from "./actions";
 import { INTEREST_OPTIONS } from "@/lib/types/trip-intent";
 import { DESTINATIONS } from "@/data/destinations";
+import { CountryFlag } from "@/components/country-flag";
 
 /* ---------- shared style tokens ---------- */
 const selectedCard =
@@ -147,6 +148,27 @@ export function IntermediateSurvey({
     <form action={onSubmit} className="space-y-8">
       {/* Destinations */}
       <Section title="Which destinations are we comparing?">
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => setCandidates(DESTINATIONS.map((d) => d.id))}
+            className="btn btn-ghost text-xs"
+            disabled={candidates.length === DESTINATIONS.length}
+          >
+            Select all
+          </button>
+          <button
+            type="button"
+            onClick={() => setCandidates([])}
+            className="btn btn-ghost text-xs"
+            disabled={candidates.length === 0}
+          >
+            Unselect all
+          </button>
+          <span className="text-xs text-[color:var(--color-muted)] ml-1">
+            {candidates.length} of {DESTINATIONS.length} selected
+          </span>
+        </div>
         <div className="grid gap-2 sm:grid-cols-3">
           {DESTINATIONS.map((d) => {
             const on = candidates.includes(d.id);
@@ -161,9 +183,10 @@ export function IntermediateSurvey({
                   <Check on={on} />
                 </div>
                 <div
-                  className={`text-xs ${on ? "text-white/70" : "text-[color:var(--color-muted)]"}`}
+                  className={`text-xs flex items-center gap-1.5 mt-0.5 ${on ? "text-white/80" : "text-[color:var(--color-muted)]"}`}
                 >
-                  {d.country}
+                  <CountryFlag country={d.country} size={14} />
+                  <span>{d.country}</span>
                 </div>
               </ChoiceCard>
             );

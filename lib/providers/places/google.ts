@@ -43,12 +43,14 @@ const detailCache = new SWRCache<Place | null>({
 
 // Category → included place types for Places API (New).
 // See https://developers.google.com/maps/documentation/places/web-service/place-types
+// IMPORTANT: only Table A "Types" are allowed in searchNearby.includedTypes.
+// "landmark" is NOT in Table A — the closest valid types are
+// "tourist_attraction" and "historical_landmark".
 const CATEGORY_TYPES: Record<PlaceSearchQuery["kind"], string[]> = {
   attractions: [
     "tourist_attraction",
     "museum",
     "art_gallery",
-    "landmark",
     "park",
     "historical_landmark",
   ],

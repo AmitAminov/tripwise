@@ -12,9 +12,11 @@ import {
   formatDuration,
   type RouteLeg,
 } from "@/lib/providers/routes/google";
-import { placesProvider } from "@/lib/providers";
+import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { MapView, type MapPin } from "../map/map-view";
+import { EventStrip, type PlanEventItem } from "./event-strip";
+import type { EventItem } from "@/lib/providers/types";
 
 type Slot = "morning" | "afternoon" | "evening" | "any";
 
@@ -140,28 +142,95 @@ export default async function PlanPage({
     ? { lat: resolvedDest.coords.lat, lng: resolvedDest.coords.lng }
     : null;
 
-  // Context pins from Google Places when available.
+  // Context pins from Google Places when available + real events that
+  // overlap the trip window. Both run in parallel.
   const places = placesProvider();
+  const eProvider = eventsProvider();
+  const tripFromIso = trip.start_date
+    ? `${trip.start_date}T00:00:00Z`
+    : null;
+  const tripToIso = trip.end_date ? `${trip.end_date}T23:59:59Z` : null;
+
+  const [placesResult, eventsResult] = await Promise.all([
+    places && mapCenter
+      ? places.search({
+          center: mapCenter,
+          kind: "attractions",
+          radiusMeters: 4000,
+          limit: 10,
+        })
+      : Promise.resolve(null),
+    eProvider && tripFromIso && tripToIso
+      ? eProvider.search({
+          city: trip.destination ?? trip.name,
+          from: tripFromIso,
+          to: tripToIso,
+          limit: 40,
+        })
+      : Promise.resolve(null),
+  ]);
+
+  // Group events by day-index within the trip window so each day card can
+  // surface its own "What's on" strip. Uses the trip's start_date as
+  // anchor (UTC) to compute the day slot the event falls in.
+  const eventsByDay = new Map<number, PlanEventItem[]>();
+  if (eventsResult?.data && trip.start_date) {
+    const anchor = new Date(`${trip.start_date}T00:00:00Z`).getTime();
+    for (const ev of eventsResult.data as EventItem[]) {
+      const t = new Date(ev.startAt).getTime();
+      if (!Number.isFinite(t)) continue;
+      const di = Math.floor((t - anchor) / 86400_000);
+      if (di < 0 || di >= totalDays) continue;
+      const arr = eventsByDay.get(di) ?? [];
+      arr.push({
+        id: ev.id,
+        name: ev.name,
+        startAt: ev.startAt,
+        venueName: ev.venueName,
+        coordsLat: ev.coords?.lat,
+        coordsLng: ev.coords?.lng,
+        ticketUrl: ev.ticketUrl,
+        categories: ev.categories,
+      });
+      eventsByDay.set(di, arr);
+    }
+    // Sort each day's list chronologically, cap at 4 per day so the card
+    // stays scannable — the map + /trips/[id]/events show the full set.
+    for (const [di, list] of eventsByDay) {
+      list.sort((a, b) => a.startAt.localeCompare(b.startAt));
+      if (list.length > 4) eventsByDay.set(di, list.slice(0, 4));
+    }
+  }
+
   let contextPins: MapPin[] = [];
-  if (places && mapCenter) {
-    const result = await places.search({
-      center: mapCenter,
-      kind: "attractions",
-      radiusMeters: 4000,
-      limit: 10,
-    });
-    if (result.data) {
-      contextPins = result.data.map((p) => ({
-        id: `place:${p.id}`,
-        title: p.name,
-        lat: p.coords.lat,
-        lng: p.coords.lng,
-        kind: "attraction" as const,
-        subtitle:
-          p.rating != null
-            ? `${p.rating.toFixed(1)}★ · ${p.category.replace(/_/g, " ")}`
-            : p.category.replace(/_/g, " "),
-      }));
+  if (placesResult?.data) {
+    contextPins = placesResult.data.map((p) => ({
+      id: `place:${p.id}`,
+      title: p.name,
+      lat: p.coords.lat,
+      lng: p.coords.lng,
+      kind: "attraction" as const,
+      subtitle:
+        p.rating != null
+          ? `${p.rating.toFixed(1)}★ · ${p.category.replace(/_/g, " ")}`
+          : p.category.replace(/_/g, " "),
+    }));
+  }
+  // Only pin events that came back with coordinates (many curated /
+  // aggregate entries lack a specific venue lat/lng).
+  if (eventsResult?.data) {
+    for (const ev of eventsResult.data) {
+      if (!ev.coords) continue;
+      const day = ev.startAt.slice(0, 10);
+      const time = ev.startAt.slice(11, 16);
+      contextPins.push({
+        id: `event:${ev.id}`,
+        title: ev.name,
+        lat: ev.coords.lat,
+        lng: ev.coords.lng,
+        kind: "event" as const,
+        subtitle: `${day} ${time}${ev.venueName ? " · " + ev.venueName : ""}`,
+      });
     }
   }
 
@@ -267,6 +336,15 @@ export default async function PlanPage({
                 />
                 Nearby attractions
               </span>
+              {contextPins.some((p) => p.kind === "event") && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ background: "#3a5f9e" }}
+                  />
+                  Live events during your trip
+                </span>
+              )}
               <span className="inline-flex items-center gap-1.5">
                 <span
                   className="w-2 h-2 rounded-full"
@@ -354,6 +432,15 @@ export default async function PlanPage({
                     <AIDraftButton tripId={trip.id} dayIndex={dayIndex} />
                   </div>
                 </header>
+
+                <EventStrip
+                  tripId={trip.id}
+                  dayIndex={dayIndex}
+                  events={eventsByDay.get(dayIndex) ?? []}
+                  addedTitles={
+                    new Set(dayItems.map((i) => i.title.toLowerCase()))
+                  }
+                />
 
                 <div className="space-y-4">
                   {SLOT_ORDER.map((slot) => {

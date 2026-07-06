@@ -76,6 +76,86 @@ export async function addItineraryItem(
   return {};
 }
 
+/**
+ * Insert a real live event as an itinerary item. The event's venue coords
+ * and start time are preserved so the map pins + walking chips work, and
+ * we tag the row `[Live event]` so provenance survives.
+ */
+export async function addEventToPlan(
+  tripId: string,
+  dayIndex: number,
+  ev: {
+    id: string;
+    name: string;
+    startAt: string; // ISO
+    venueName?: string;
+    coordsLat?: number;
+    coordsLng?: number;
+    ticketUrl?: string;
+    categories?: string[];
+  },
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  if (!ev.name || ev.name.length > 200) {
+    return { error: "Invalid event." };
+  }
+  if (dayIndex < 0 || dayIndex > 60) {
+    return { error: "Invalid day." };
+  }
+
+  // Parse the event's start time via the Date constructor rather than
+  // slicing the string — a malformed ISO would previously silently slot to
+  // "any" and hide a real integration bug. Now: bad startAt → reject with
+  // a clear error instead of pretending it's a valid anytime item.
+  const startMs = ev.startAt ? new Date(ev.startAt).getTime() : NaN;
+  if (!Number.isFinite(startMs)) {
+    return { error: `Event has invalid start time: ${ev.startAt ?? "(empty)"}` };
+  }
+  const hour = new Date(startMs).getUTCHours();
+  const slot: Slot =
+    hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+
+  const { data: existing } = await supabase
+    .from("itinerary_items")
+    .select("position")
+    .eq("trip_id", tripId)
+    .eq("day_index", dayIndex)
+    .eq("slot", slot)
+    .order("position", { ascending: false })
+    .limit(1);
+  const position = (existing?.[0]?.position ?? -1) + 1;
+
+  const timeStr = ev.startAt.slice(11, 16);
+  const noteParts: string[] = [`Starts ${timeStr}`];
+  if (ev.ticketUrl) noteParts.push(`Tickets: ${ev.ticketUrl}`);
+  if (ev.categories && ev.categories.length > 0) {
+    noteParts.push(ev.categories.slice(0, 3).join(", "));
+  }
+  noteParts.push("[Live event]");
+
+  const { error } = await supabase.from("itinerary_items").insert({
+    trip_id: tripId,
+    day_index: dayIndex,
+    slot,
+    position,
+    title: ev.name.slice(0, 200),
+    notes: noteParts.join(" · ").slice(0, 500),
+    address: ev.venueName ?? null,
+    coords_lat: ev.coordsLat ?? null,
+    coords_lng: ev.coordsLng ?? null,
+    created_by: user.id,
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath(`/trips/${tripId}/plan`);
+  return {};
+}
+
 export async function removeItineraryItem(
   tripId: string,
   itemId: string,

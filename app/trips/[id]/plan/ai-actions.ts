@@ -2,9 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { generateText } from "@/lib/ai/gemini";
-import { placesProvider } from "@/lib/providers";
+import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { geocode } from "@/lib/geocoding";
+import type { EventItem } from "@/lib/providers/types";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -98,32 +99,79 @@ export async function draftDayPlan(
   const resolved = await resolveDestination(destination);
   const coords = resolved?.coords ?? null;
 
-  // Pull real Places data (top attractions + restaurants) to ground the model.
+  // Pull real Places data (top attractions + restaurants) AND real events
+  // happening on THIS day, all in parallel, so the prompt sees both.
+  // Events use the trip's city name + a 24h window centered on this day.
   const provider = placesProvider();
+  const eProvider = eventsProvider();
+
+  // Day window: from the day's date at 00:00 UTC to 23:59 UTC.
+  // We use UTC on purpose — the events API accepts ISO instants and we don't
+  // want a locale swing to move the query off the day. When the trip has no
+  // start_date we anchor on today, but we STILL add `dayIndex` days so
+  // "Day 3" of a date-less trip means three days from now, not today —
+  // otherwise the events query silently collapses to today for every day.
+  const anchorMs = trip.start_date
+    ? new Date(trip.start_date).getTime()
+    : Date.now();
+  const dayStartIso = new Date(
+    anchorMs + dayIndex * 86400 * 1000,
+  ).toISOString();
+  const dayEndIso = new Date(
+    new Date(dayStartIso).getTime() + 86400 * 1000 - 1,
+  ).toISOString();
+
+  const eventsCity = destination;
+
+  const [attractionsRes, restaurantsRes, eventsRes] = await Promise.all([
+    provider && coords
+      ? provider.search({
+          center: coords,
+          kind: "attractions",
+          radiusMeters: 5000,
+          limit: 10,
+        })
+      : Promise.resolve(null),
+    provider && coords
+      ? provider.search({
+          center: coords,
+          kind: "restaurants",
+          radiusMeters: 5000,
+          limit: 8,
+        })
+      : Promise.resolve(null),
+    eProvider
+      ? eProvider.search({
+          city: eventsCity,
+          from: dayStartIso,
+          to: dayEndIso,
+          limit: 8,
+        })
+      : Promise.resolve(null),
+  ]);
+
   const placeLines: string[] = [];
-  if (provider && coords) {
-    const [attractions, restaurants] = await Promise.all([
-      provider.search({
-        center: coords,
-        kind: "attractions",
-        radiusMeters: 5000,
-        limit: 10,
-      }),
-      provider.search({
-        center: coords,
-        kind: "restaurants",
-        radiusMeters: 5000,
-        limit: 8,
-      }),
-    ]);
-    for (const p of attractions.data ?? []) {
-      const rating = p.rating ? ` [${p.rating.toFixed(1)}★]` : "";
-      placeLines.push(`- ${p.name}${rating} (attraction)`);
-    }
-    for (const p of restaurants.data ?? []) {
-      const rating = p.rating ? ` [${p.rating.toFixed(1)}★]` : "";
-      placeLines.push(`- ${p.name}${rating} (restaurant)`);
-    }
+  for (const p of attractionsRes?.data ?? []) {
+    const rating = p.rating ? ` [${p.rating.toFixed(1)}★]` : "";
+    placeLines.push(`- ${p.name}${rating} (attraction)`);
+  }
+  for (const p of restaurantsRes?.data ?? []) {
+    const rating = p.rating ? ` [${p.rating.toFixed(1)}★]` : "";
+    placeLines.push(`- ${p.name}${rating} (restaurant)`);
+  }
+
+  // Event lines + a lookup so we can preserve venue coords + ticket URLs when
+  // Gemini picks one by exact name.
+  const events: EventItem[] = eventsRes?.data ?? [];
+  const eventByLowerName = new Map<string, EventItem>();
+  const eventLines: string[] = [];
+  for (const ev of events) {
+    const start = ev.startAt.slice(11, 16); // HH:MM
+    const venue = ev.venueName ? ` at ${ev.venueName}` : "";
+    const cat =
+      ev.categories.length > 0 ? ` [${ev.categories.slice(0, 2).join(", ")}]` : "";
+    eventLines.push(`- ${ev.name}${venue}, starts ${start}${cat}`);
+    eventByLowerName.set(ev.name.toLowerCase(), ev);
   }
 
   const existingLines = (existingDay ?? [])
@@ -144,8 +192,9 @@ Rules:
 - 3 to 4 items total, distributed across morning, afternoon, and evening
 - Each item is one specific concrete thing (not "explore old town" — pick a specific attraction, restaurant, walk, or moment)
 - ${placeLines.length > 0 ? "STRONGLY prefer places from the 'Real places nearby' list below. Use their exact names." : "Use well-known specific places."}
+- ${eventLines.length > 0 ? "If a 'Real events happening on this date' entry fits the vibe (concert, festival, exhibit, show), include it — use the EXACT event name as the item title so we can link tickets. Prefer an event for evening when one exists." : ""}
 - Consider walking distance and jet-lag on the first day
-- Autumn 2026 weather-appropriate
+- Weather-appropriate for the destination and date
 - Reflect that the travelers are a couple, not a group tour
 - Do NOT recommend anything already on their existing plan
 - Prefer items that fit with their already-decided choices${
@@ -155,6 +204,9 @@ Rules:
 
 Real places nearby (rated on Google Maps — prefer these):
 ${placeLines.join("\n") || "(none — Places API not available; use general knowledge)"}
+
+Real events happening on this date (from PredictHQ / Ticketmaster — use the exact event name so tickets link correctly):
+${eventLines.join("\n") || "(no live events matched this date)"}
 
 Existing items on this day (skip these):
 ${existingLines || "(none yet)"}
@@ -201,13 +253,21 @@ Return JSON matching the schema.`;
     positionsBySlot.set(slot, (rows?.[0]?.position ?? -1) + 1);
   }
 
-  // Geocode each drafted item title within the destination context
-  // so Routes can compute walking-time chips between consecutive items.
-  // Run all lookups in parallel — geocoding is cached in-memory.
+  // For each draft item:
+  //   - If it matches a real event by exact name, use the event's venue
+  //     coords + venue name + ticket URL (no geocoding call needed).
+  //   - Otherwise, geocode the title within the destination context so
+  //     Routes can compute walking-time chips between stops.
+  // Runs the geocoding lookups in parallel (they're cached in-memory).
   const drafts = parsed.items.filter((it) => it.title && isSlot(it.slot));
+  const matchedEvents: (EventItem | null)[] = drafts.map(
+    (it) => eventByLowerName.get(it.title.toLowerCase()) ?? null,
+  );
   const geocoded = await Promise.all(
-    drafts.map((it) =>
-      geocode(`${it.title}, ${destination}`).catch(() => null),
+    drafts.map((it, i) =>
+      matchedEvents[i]
+        ? Promise.resolve(null) // event supplies coords/address
+        : geocode(`${it.title}, ${destination}`).catch(() => null),
     ),
   );
 
@@ -215,12 +275,25 @@ Return JSON matching the schema.`;
     const slot = it.slot as Slot;
     const pos = positionsBySlot.get(slot) ?? 0;
     positionsBySlot.set(slot, pos + 1);
-    // Tag AI-drafted notes so the provenance is preserved in the DB
-    // (spec: clearly label AI-generated content). Users can freely
-    // edit or remove the tag.
+
+    // Tag AI-drafted notes with provenance. When the draft matches a real
+    // event, also fold in the ticket URL + start time so the user can act
+    // on it without leaving the plan.
     const rawNotes = it.notes?.slice(0, 260) ?? "";
-    const notes = rawNotes ? `${rawNotes} · [AI draft]` : "[AI draft]";
+    const ev = matchedEvents[i];
+    const eventSuffix = ev
+      ? ` · Starts ${ev.startAt.slice(11, 16)}${ev.ticketUrl ? " · Tickets: " + ev.ticketUrl : ""} · [Live event]`
+      : " · [AI draft]";
+    const notes = rawNotes
+      ? `${rawNotes}${eventSuffix}`
+      : eventSuffix.replace(/^ · /, "");
+
+    // Prefer event venue data when we matched one; fall back to geocoding.
     const geoHit = geocoded[i];
+    const address = ev?.venueName ?? geoHit?.formattedAddress ?? null;
+    const coordsLat = ev?.coords?.lat ?? geoHit?.coords.lat ?? null;
+    const coordsLng = ev?.coords?.lng ?? geoHit?.coords.lng ?? null;
+
     return {
       trip_id: tripId,
       day_index: dayIndex,
@@ -228,9 +301,9 @@ Return JSON matching the schema.`;
       position: pos,
       title: it.title.slice(0, 200),
       notes,
-      address: geoHit?.formattedAddress ?? null,
-      coords_lat: geoHit?.coords.lat ?? null,
-      coords_lng: geoHit?.coords.lng ?? null,
+      address,
+      coords_lat: coordsLat,
+      coords_lng: coordsLng,
       created_by: user.id,
     };
   });

@@ -4,12 +4,21 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { InvitePanel } from "./invite-panel";
 import { formatDateRange } from "@/lib/format";
-import { placesProvider } from "@/lib/providers";
+import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { detectRegionalScope } from "@/lib/destination-scope";
 import { MapView, type MapPin } from "./map/map-view";
+import { KindsPicker } from "./map/kinds-picker";
+import {
+  PICKABLE_KINDS,
+  PLURAL_TO_PIN,
+  PLACES_KINDS,
+  type PickableKind,
+  type PlacesKind,
+} from "./map/kinds";
 
-// Map removed — it now lives inline on the right side of this page.
+// Map removed — it now lives inline on the right side of this page,
+// with the full picker + filter chips baked in.
 const V2_TABS = [
   { slug: "flights", label: "Flights", note: "real prices, converted to USD", ready: true },
   { slug: "attractions", label: "Attractions", note: "Google Places (New)", ready: true },
@@ -22,12 +31,28 @@ const V2_TABS = [
   { slug: "decisions", label: "Decisions", note: "the reveal mechanic", ready: true },
 ] as const;
 
+function parseKinds(raw: string | string[] | undefined): PickableKind[] {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value) return ["attractions"];
+  const picked = value
+    .split(",")
+    .map((k) => k.trim().toLowerCase())
+    .filter((k): k is PickableKind =>
+      (PICKABLE_KINDS as readonly string[]).includes(k),
+    );
+  return picked.length > 0 ? picked : ["attractions"];
+}
+
 export default async function TripDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ kinds?: string | string[] }>;
 }) {
   const { id } = await params;
+  const { kinds: kindsParam } = await searchParams;
+  const selectedKinds = parseKinds(kindsParam);
   const supabase = await createClient();
   const {
     data: { user },
@@ -61,10 +86,10 @@ export default async function TripDetailPage({
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
-  // Fetch data for the inline map: destination coords + itinerary pins +
-  // top attractions in one round-trip. Same pattern as /trips/[id]/map
-  // uses, but scoped down to a preview (attractions only; kinds picker
-  // lives on the full-map route the "Filters + full map" link points at).
+  // Fetch data for the FULL inline map: destination coords + itinerary
+  // pins + every selected picker kind (Places for the four place kinds,
+  // events provider for "events") in parallel. Matches the fetch shape
+  // of the standalone /trips/[id]/map route so the two stay in sync.
   const [resolvedDest, itemsRes] = await Promise.all([
     resolveDestination(trip.destination),
     supabase
@@ -77,29 +102,95 @@ export default async function TripDetailPage({
     : null;
 
   const places = placesProvider();
+  const eProvider = eventsProvider();
+
   let contextPins: MapPin[] = [];
-  if (places && mapCenter) {
+  const kindErrors: Array<{ kind: PickableKind; error: string }> = [];
+  const placesKinds = selectedKinds.filter((k): k is PlacesKind =>
+    (PLACES_KINDS as readonly string[]).includes(k),
+  );
+  const wantEvents = selectedKinds.includes("events");
+
+  if (mapCenter) {
+    const tripFromIso = trip.start_date
+      ? `${trip.start_date}T00:00:00Z`
+      : null;
+    const tripToIso = trip.end_date ? `${trip.end_date}T23:59:59Z` : null;
     const scope = detectRegionalScope(null, trip.destination);
-    const res = await places.search({
-      center: mapCenter,
-      kind: "attractions",
-      regional: scope.regional,
-      regionQuery: scope.regionQuery,
-      limit: 20,
-    });
-    if (res.data) {
-      contextPins = res.data.map((p) => ({
-        id: `place:${p.id}`,
-        title: p.name,
-        lat: p.coords.lat,
-        lng: p.coords.lng,
-        kind: "attraction" as const,
-        subtitle:
-          p.rating != null
-            ? `${p.rating.toFixed(1)}★ · ${p.category.replace(/_/g, " ")}`
-            : p.category.replace(/_/g, " "),
-      }));
+
+    const [placeResults, eventsRes] = await Promise.all([
+      places
+        ? Promise.all(
+            placesKinds.map(async (kind) => {
+              const res = await places.search({
+                center: { lat: mapCenter.lat, lng: mapCenter.lng },
+                kind,
+                regional: scope.regional,
+                regionQuery: scope.regionQuery,
+                limit: 20,
+              });
+              return { kind, res };
+            }),
+          )
+        : Promise.resolve([] as Array<{ kind: PlacesKind; res: never }>),
+      wantEvents && eProvider && tripFromIso && tripToIso
+        ? eProvider.search({
+            city: trip.destination ?? trip.name,
+            from: tripFromIso,
+            to: tripToIso,
+            limit: 30,
+          })
+        : Promise.resolve(null),
+    ]);
+
+    for (const { kind, res } of placeResults) {
+      if (res.data) {
+        const pinKind = PLURAL_TO_PIN[kind];
+        for (const p of res.data) {
+          contextPins.push({
+            id: `place:${p.id}`,
+            title: p.name,
+            lat: p.coords.lat,
+            lng: p.coords.lng,
+            kind: pinKind,
+            subtitle:
+              p.rating != null
+                ? `${p.rating.toFixed(1)}★ · ${p.category.replace(/_/g, " ")}`
+                : p.category.replace(/_/g, " "),
+          } as MapPin);
+        }
+      } else if (res.error) {
+        kindErrors.push({ kind, error: res.error });
+      }
     }
+
+    if (eventsRes) {
+      if (eventsRes.data) {
+        for (const ev of eventsRes.data) {
+          if (!ev.coords) continue;
+          const day = ev.startAt.slice(0, 10);
+          const time = ev.startAt.slice(11, 16);
+          contextPins.push({
+            id: `event:${ev.id}`,
+            title: ev.name,
+            lat: ev.coords.lat,
+            lng: ev.coords.lng,
+            kind: "event" as const,
+            subtitle: `${day} ${time}${ev.venueName ? " · " + ev.venueName : ""}`,
+          });
+        }
+      } else if (eventsRes.error) {
+        kindErrors.push({ kind: "events", error: eventsRes.error });
+      }
+    }
+
+    // Dedupe by id (a place could match multiple kinds).
+    const seen = new Set<string>();
+    contextPins = contextPins.filter((p) => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
   }
 
   const itemPins: MapPin[] = (itemsRes.data ?? [])
@@ -116,7 +207,6 @@ export default async function TripDetailPage({
 
   const mapsClientKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? null;
   const allPins = [...contextPins, ...itemPins];
-  const hasPins = allPins.length > 0;
 
   return (
     <>
@@ -229,23 +319,14 @@ export default async function TripDetailPage({
           </div>
 
           <aside className="lg:sticky lg:top-6">
-            <div className="flex items-baseline justify-between mb-3">
-              <h2 className="text-xs font-medium uppercase tracking-widest text-[color:var(--color-muted)]">
-                Map
-              </h2>
-              <Link
-                href={`/trips/${trip.id}/map`}
-                className="text-xs text-[color:var(--color-primary)] hover:underline"
-                title="Toggle categories (restaurants, cafés, bars, events), pan the whole region"
-              >
-                Full map + filters →
-              </Link>
-            </div>
+            <h2 className="text-xs font-medium uppercase tracking-widest text-[color:var(--color-muted)] mb-3">
+              Map
+            </h2>
 
             {!mapsClientKey && (
               <div className="card p-4 text-sm text-[color:var(--color-fg-2)]">
                 Set <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> in
-                <code> .env.local</code> to see the inline map.
+                <code> .env.local</code> to see the map.
               </div>
             )}
 
@@ -258,43 +339,21 @@ export default async function TripDetailPage({
 
             {mapsClientKey && mapCenter && (
               <>
+                <KindsPicker initial={selectedKinds} />
+                {kindErrors.length > 0 && (
+                  <div className="card p-3 mb-4 text-xs text-[color:var(--color-warn)]">
+                    Couldn&apos;t load{" "}
+                    {kindErrors.map((e) => e.kind).join(", ")} from Google
+                    Places. Other categories still shown.
+                  </div>
+                )}
                 <MapView
                   apiKey={mapsClientKey}
                   center={mapCenter}
                   pins={allPins}
                   height={640}
-                  showControls={false}
+                  showControls
                 />
-                <div className="mt-3 text-xs text-[color:var(--color-muted)] flex flex-wrap items-center gap-3">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ background: "#c9a961" }}
-                    />
-                    Nearby attractions
-                    <span className="tabular-nums opacity-70">
-                      ({contextPins.length})
-                    </span>
-                  </span>
-                  {itemPins.length > 0 && (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span
-                        className="w-2 h-2 rounded-full"
-                        style={{ background: "#2d5f4e" }}
-                      />
-                      Your plan items
-                      <span className="tabular-nums opacity-70">
-                        ({itemPins.length})
-                      </span>
-                    </span>
-                  )}
-                  {!hasPins && (
-                    <span>
-                      No pins yet — add itinerary items or expand the search on
-                      the full map.
-                    </span>
-                  )}
-                </div>
               </>
             )}
           </aside>

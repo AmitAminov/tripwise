@@ -221,6 +221,12 @@ export function MapView({
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: true,
+        // "greedy" — plain scroll (mobile: one-finger drag) zooms/pans the
+        // map. Default "auto" mode requires ctrl+scroll on desktop to
+        // avoid stealing page scroll, but the map lives on a sticky
+        // pane here where "let me zoom already" wins over "let me scroll
+        // past". No more "Use ctrl + scroll to zoom the map" overlay.
+        gestureHandling: "greedy",
         styles: MAP_STYLE,
       });
     }

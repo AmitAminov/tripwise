@@ -264,7 +264,31 @@ Return JSON matching the schema.`;
   //   - Otherwise, geocode the title within the destination context so
   //     Routes can compute walking-time chips between stops.
   // Runs the geocoding lookups in parallel (they're cached in-memory).
-  const drafts = parsed.items.filter((it) => it.title && isSlot(it.slot));
+  //
+  // Two dedupe / validity filters before we hit the DB:
+  //   1. Trim + reject whitespace-only titles. The DB has
+  //      `check (length(title) between 1 and 200)` so an insert with a
+  //      blank title would fail the whole batch. `it.title` truthy-check
+  //      alone accepts "   " which passes JS but fails Postgres.
+  //   2. Skip anything already on this day (case-insensitive title
+  //      match). We tell Gemini to skip existing items in the prompt,
+  //      but the model doesn't always obey — clicking "AI draft" twice
+  //      on the same day would otherwise produce duplicates.
+  const existingLower = new Set(
+    (existingDay ?? []).map((e) => (e.title ?? "").trim().toLowerCase()),
+  );
+  const seenThisBatch = new Set<string>();
+  const drafts = parsed.items.filter((it) => {
+    if (!it.title || !isSlot(it.slot)) return false;
+    const trimmed = it.title.trim();
+    if (trimmed.length === 0) return false;
+    const key = trimmed.toLowerCase();
+    if (existingLower.has(key)) return false;
+    if (seenThisBatch.has(key)) return false;
+    seenThisBatch.add(key);
+    it.title = trimmed;
+    return true;
+  });
   const matchedEvents: (EventItem | null)[] = drafts.map(
     (it) => eventByLowerName.get(it.title.toLowerCase()) ?? null,
   );

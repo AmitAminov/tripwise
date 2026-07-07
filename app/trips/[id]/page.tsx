@@ -19,16 +19,19 @@ import {
 
 // Map removed — it now lives inline on the right side of this page,
 // with the full picker + filter chips baked in.
+// Day plan + Decisions were merged into a single "Plan" tile: every
+// day of the plan IS a chunk of choices, so the split didn't earn its
+// keep. The /decisions route still exists for trip-wide decisions
+// that aren't day-scoped (hotel choice, etc.) but is de-emphasized.
 const V2_TABS = [
   { slug: "flights", label: "Flights", note: "real prices, converted to USD", ready: true },
   { slug: "attractions", label: "Attractions", note: "Google Places (New)", ready: true },
   { slug: "attractions?kind=restaurants", label: "Restaurants", note: "Google Places (New)", ready: true },
   { slug: "hotels", label: "Hotels", note: "estimates + deep links", ready: true },
-  { slug: "plan", label: "Day plan", note: "day-by-day itinerary", ready: true },
+  { slug: "plan", label: "Plan", note: "day-by-day choices + itinerary", ready: true },
   { slug: "pricing", label: "Prices", note: "aggregated estimates", ready: true },
   { slug: "events", label: "Events", note: "curated + Ticketmaster (opt.)", ready: true },
   { slug: "visuals", label: "Mood", note: "AI generated visuals", ready: true },
-  { slug: "decisions", label: "Decisions", note: "the reveal mechanic", ready: true },
 ] as const;
 
 function parseKinds(raw: string | string[] | undefined): PickableKind[] {

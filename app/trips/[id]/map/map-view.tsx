@@ -118,40 +118,52 @@ export function MapView({
 
   // Load Maps JS SDK once.
   //
-  // The bootstrap uses `loading=async`, which is Google's recommended path
-  // but ALSO means constructors like `Map`, `Marker`, and `LatLngBounds`
-  // aren't populated when `script.onload` fires — you must call
-  // `google.maps.importLibrary("<name>")` and await the result before
-  // using the class. Skipping this step is what produced
-  // `window.google.maps.Map is not a constructor`.
+  // We use the synchronous loader (no `loading=async`). Trade-off: Google
+  // logs a deprecation warning in the console, but the reward is that
+  // `Map`, `Marker`, `LatLngBounds`, and `InfoWindow` are all populated
+  // the instant `script.onload` fires — no importLibrary race, no
+  // constructor-is-not-a-constructor crash, no silent "did it load or
+  // not" ambiguity. Also listens for Google's `gm_authFailure` global
+  // callback so an invalid / restricted API key produces a real error
+  // banner instead of a mystery blank tile.
   useEffect(() => {
     let cancelled = false;
 
-    const bootstrapLibs = async () => {
-      const gmaps = window.google?.maps;
-      if (!gmaps?.importLibrary) return;
-      try {
-        await Promise.all([
-          gmaps.importLibrary("maps"),
-          gmaps.importLibrary("marker"),
-        ]);
-        if (!cancelled) setReady(true);
-      } catch (e) {
-        if (!cancelled) {
-          setLoadError(
-            e instanceof Error
-              ? `Maps library failed to load: ${e.message}`
-              : "Maps library failed to load.",
-          );
-        }
-      }
+    const markReady = () => {
+      if (cancelled) return;
+      if (window.google?.maps?.Map) setReady(true);
+      else
+        setLoadError(
+          "Maps JS loaded but constructors are missing. Enable Maps JavaScript API on your Cloud project.",
+        );
     };
 
-    if (window.google?.maps?.importLibrary) {
-      // Bootstrap already present (another instance loaded it).
-      bootstrapLibs();
+    const authFailure = () => {
+      if (cancelled) return;
+      setLoadError(
+        "Google Maps auth failed. Check the API key: (1) Maps JavaScript API is enabled, (2) key restrictions allow this origin, (3) billing is on.",
+      );
+    };
+
+    (
+      window as unknown as { gm_authFailure?: () => void }
+    ).gm_authFailure = authFailure;
+
+    // Watchdog: if neither `ready` nor `loadError` fires within 8s, surface
+    // a clear timeout so the user isn't stuck staring at a blank tile.
+    const timer = window.setTimeout(() => {
+      if (!cancelled && !window.google?.maps?.Map) {
+        setLoadError(
+          "Google Maps didn't load within 8s. Likely causes: Maps JavaScript API not enabled on your Cloud project, API-key referrer restrictions block http://localhost:3000, or the key is wrong.",
+        );
+      }
+    }, 8000);
+
+    if (window.google?.maps?.Map) {
+      markReady();
       return () => {
         cancelled = true;
+        window.clearTimeout(timer);
       };
     }
 
@@ -159,7 +171,7 @@ export function MapView({
       "script[data-tripwise-maps]",
     );
     if (existing) {
-      existing.addEventListener("load", bootstrapLibs);
+      existing.addEventListener("load", markReady);
       existing.addEventListener("error", () =>
         setLoadError(
           "Failed to load Maps JS. Enable Maps JavaScript API on your Cloud project.",
@@ -167,15 +179,16 @@ export function MapView({
       );
       return () => {
         cancelled = true;
+        window.clearTimeout(timer);
       };
     }
 
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&libraries=marker`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker`;
     script.async = true;
     script.defer = true;
     script.setAttribute("data-tripwise-maps", "true");
-    script.onload = bootstrapLibs;
+    script.onload = markReady;
     script.onerror = () =>
       setLoadError(
         "Failed to load Maps JS. Enable Maps JavaScript API on your Cloud project.",
@@ -184,6 +197,7 @@ export function MapView({
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [apiKey]);
 
@@ -337,10 +351,19 @@ export function MapView({
       )}
 
       <div
-        ref={mapRef}
-        className="w-full rounded-[var(--radius)] overflow-hidden border border-[color:var(--color-line)]"
+        className="w-full rounded-[var(--radius)] overflow-hidden border border-[color:var(--color-line)] relative"
         style={{ height: `${height}px`, background: "var(--color-surface-2)" }}
-      />
+      >
+        <div ref={mapRef} className="w-full h-full" />
+        {!ready && !loadError && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="flex items-center gap-2 text-xs text-[color:var(--color-muted)] bg-[color:var(--color-surface)] px-3 py-1.5 rounded-full border border-[color:var(--color-line)]">
+              <span className="inline-block w-2 h-2 rounded-full bg-[color:var(--color-primary)] animate-pulse" />
+              Loading Google Maps…
+            </div>
+          </div>
+        )}
+      </div>
 
       {showControls && (
         <p className="text-xs text-[color:var(--color-muted)]">

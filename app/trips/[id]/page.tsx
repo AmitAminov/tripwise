@@ -122,7 +122,7 @@ export default async function TripDetailPage({
 
         <section>
           <h2 className="text-xs font-medium uppercase tracking-widest text-[color:var(--color-muted)] mb-3">
-            Trip surfaces
+            Trip cornerstones
           </h2>
           <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {V2_TABS.map((tab) =>

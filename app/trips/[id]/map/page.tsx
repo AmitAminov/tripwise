@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
+import { detectRegionalScope } from "@/lib/destination-scope";
 import { MapView, type MapPin } from "./map-view";
 import { KindsPicker } from "./kinds-picker";
 import {
@@ -82,6 +83,11 @@ export default async function TripMapPage({
       : null;
     const tripToIso = trip.end_date ? `${trip.end_date}T23:59:59Z` : null;
 
+    // Route regional trips (South Italy, Italy-Wide, etc.) through text
+    // search so a 50km circle around one anchor city doesn't clip the
+    // rest of the region. False negatives are worse than extras here.
+    const scope = detectRegionalScope(null, trip.destination);
+
     const [placeResults, eventsRes] = await Promise.all([
       provider
         ? Promise.all(
@@ -89,8 +95,9 @@ export default async function TripMapPage({
               const res = await provider.search({
                 center: { lat: center.lat, lng: center.lng },
                 kind,
-                radiusMeters: 4000,
-                limit: 12,
+                regional: scope.regional,
+                regionQuery: scope.regionQuery,
+                limit: 20,
               });
               return { kind, res };
             }),

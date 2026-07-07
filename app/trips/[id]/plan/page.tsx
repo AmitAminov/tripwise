@@ -14,6 +14,7 @@ import {
 } from "@/lib/providers/routes/google";
 import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
+import { detectRegionalScope } from "@/lib/destination-scope";
 import { MapView, type MapPin } from "../map/map-view";
 import { EventStrip, type PlanEventItem } from "./event-strip";
 import type { EventItem } from "@/lib/providers/types";
@@ -151,13 +152,16 @@ export default async function PlanPage({
     : null;
   const tripToIso = trip.end_date ? `${trip.end_date}T23:59:59Z` : null;
 
+  const scope = detectRegionalScope(null, trip.destination);
+
   const [placesResult, eventsResult] = await Promise.all([
     places && mapCenter
       ? places.search({
           center: mapCenter,
           kind: "attractions",
-          radiusMeters: 4000,
-          limit: 10,
+          regional: scope.regional,
+          regionQuery: scope.regionQuery,
+          limit: 20,
         })
       : Promise.resolve(null),
     eProvider && tripFromIso && tripToIso

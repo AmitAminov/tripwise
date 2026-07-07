@@ -157,9 +157,15 @@ async function callPlaces<T>(
 }
 
 function searchKey(query: PlaceSearchQuery): string {
+  // Bump the leading "v" prefix whenever the default radius / limit /
+  // routing logic changes, so old cache entries generated under the
+  // narrower scope don't hide the wider results the user asked for.
   const lat = Math.round(query.center.lat * 1000) / 1000;
   const lng = Math.round(query.center.lng * 1000) / 1000;
-  return `${query.kind}|${lat},${lng}|${query.radiusMeters ?? "def"}|${query.keyword ?? ""}|${query.limit ?? "def"}`;
+  const regional = query.regional
+    ? `r:${query.regionQuery ?? ""}`
+    : "n";
+  return `v2|${query.kind}|${lat},${lng}|${query.radiusMeters ?? "def"}|${query.keyword ?? ""}|${query.limit ?? "def"}|${regional}`;
 }
 
 export const googlePlacesProvider: PlacesProvider = {
@@ -180,9 +186,29 @@ export const googlePlacesProvider: PlacesProvider = {
       };
     }
 
-    // Prefer nearby when we have coords; text otherwise.
+    // Places API (New) hard limits:
+    //  - searchNearby.locationRestriction.circle.radius: max 50000m
+    //  - locationBias.circle.radius (searchText): no hard cap, but Google
+    //    treats it as a "typical" bias so results can extend beyond it
+    //  - maxResultCount per call: 20
+    //
+    // Philosophy: false negatives are worse than extras (per user).
+    // Default the nearby radius to the API max, and let regional trips
+    // fall through to text search so a single city's radius doesn't
+    // clip an entire region (e.g. Puglia / Calabria out of "South Italy").
+    const NEARBY_MAX = 50_000;
+    const BIAS_DEFAULT = 40_000;
+    const BIAS_REGIONAL = 200_000;
+    const LIMIT_MAX = 20;
+
+    // Prefer nearby when we have coords AND the caller isn't asking for
+    // a region-wide sweep. Regional destinations (`_wide`, hand-tuned
+    // multi-city like "South Italy") route through text search where
+    // Google's own geographic understanding of the region name pulls in
+    // results across the whole area.
     const useNearby =
       Boolean(query.center.lat && query.center.lng) &&
+      !query.regional &&
       (query.kind !== "custom" || !query.keyword);
 
     if (useNearby) {
@@ -191,14 +217,14 @@ export const googlePlacesProvider: PlacesProvider = {
         "places:searchNearby",
         {
           includedTypes: included.length > 0 ? included : undefined,
-          maxResultCount: query.limit ?? 20,
+          maxResultCount: Math.min(query.limit ?? LIMIT_MAX, LIMIT_MAX),
           locationRestriction: {
             circle: {
               center: {
                 latitude: query.center.lat,
                 longitude: query.center.lng,
               },
-              radius: query.radiusMeters ?? 5000,
+              radius: Math.min(query.radiusMeters ?? NEARBY_MAX, NEARBY_MAX),
             },
           },
           languageCode: "en",
@@ -228,15 +254,27 @@ export const googlePlacesProvider: PlacesProvider = {
       };
     }
 
-    // Text search
+    // Text search. When the caller supplies `regionQuery` (e.g. "South
+    // Italy"), we use `top {kind} in {region}` so Google returns
+    // hand-ranked highlights across the entire area — this is what
+    // pulls Amalfi / Pompeii / Puglia into a South-Italy trip that a
+    // 50km circle around Naples silently misses.
+    const kindPhrase =
+      query.kind === "custom"
+        ? "attractions"
+        : query.kind === "cafes"
+          ? "cafés"
+          : query.kind;
     const textQuery =
       query.keyword ??
-      `${query.kind} near ${query.center.lat},${query.center.lng}`;
+      (query.regionQuery
+        ? `top ${kindPhrase} in ${query.regionQuery}`
+        : `${kindPhrase} near ${query.center.lat},${query.center.lng}`);
     const result = await callPlaces<{ places?: RawPlace[] }>(
       "places:searchText",
       {
         textQuery,
-        maxResultCount: query.limit ?? 20,
+        maxResultCount: Math.min(query.limit ?? LIMIT_MAX, LIMIT_MAX),
         languageCode: "en",
         locationBias: {
           circle: {
@@ -244,7 +282,9 @@ export const googlePlacesProvider: PlacesProvider = {
               latitude: query.center.lat,
               longitude: query.center.lng,
             },
-            radius: query.radiusMeters ?? 8000,
+            radius:
+              query.radiusMeters ??
+              (query.regional ? BIAS_REGIONAL : BIAS_DEFAULT),
           },
         },
       },

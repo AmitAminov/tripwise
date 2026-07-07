@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateText } from "@/lib/ai/gemini";
 import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
+import { detectRegionalScope } from "@/lib/destination-scope";
 import { geocode } from "@/lib/geocoding";
 import type { EventItem } from "@/lib/providers/types";
 import { revalidatePath } from "next/cache";
@@ -123,21 +124,25 @@ export async function draftDayPlan(
 
   const eventsCity = destination;
 
+  const scope = detectRegionalScope(null, destination);
+
   const [attractionsRes, restaurantsRes, eventsRes] = await Promise.all([
     provider && coords
       ? provider.search({
           center: coords,
           kind: "attractions",
-          radiusMeters: 5000,
-          limit: 10,
+          regional: scope.regional,
+          regionQuery: scope.regionQuery,
+          limit: 20,
         })
       : Promise.resolve(null),
     provider && coords
       ? provider.search({
           center: coords,
           kind: "restaurants",
-          radiusMeters: 5000,
-          limit: 8,
+          regional: scope.regional,
+          regionQuery: scope.regionQuery,
+          limit: 20,
         })
       : Promise.resolve(null),
     eProvider

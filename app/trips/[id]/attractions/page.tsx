@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { placesProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
+import { detectRegionalScope } from "@/lib/destination-scope";
 import { SendToArenaButton } from "@/components/send-to-arena-button";
 
 function firstStr(v: string | string[] | undefined): string | undefined {
@@ -50,10 +51,12 @@ export default async function AttractionsPage({
     ReturnType<NonNullable<ReturnType<typeof placesProvider>>["search"]>
   > | null = null;
   if (provider && coords) {
+    const scope = detectRegionalScope(null, trip.destination);
     result = await provider.search({
       center: { lat: coords.lat, lng: coords.lng },
-      radiusMeters: 5000,
       kind,
+      regional: scope.regional,
+      regionQuery: scope.regionQuery,
       limit: 20,
     });
   }

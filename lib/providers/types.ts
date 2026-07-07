@@ -92,6 +92,15 @@ export interface PlaceSearchQuery {
   kind: "attractions" | "restaurants" | "cafes" | "bars" | "custom";
   keyword?: string;
   limit?: number;
+  /**
+   * When true, the provider prefers a text search over a nearby-radius
+   * search. Use this for regional / country-wide destinations where
+   * anything within a 50km circle around one anchor city misses the
+   * whole rest of the region (e.g. "South Italy" → Puglia + Calabria).
+   * `regionQuery` is the natural-language phrase Google sees.
+   */
+  regional?: boolean;
+  regionQuery?: string;
 }
 
 export interface PlacesProvider {

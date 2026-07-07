@@ -151,8 +151,7 @@ export async function POST(request: NextRequest) {
           const search = await places.search({
             center: { lat: fallback.lat, lng: fallback.lng },
             kind: "attractions",
-            radiusMeters: 3000,
-            limit: 6,
+            limit: 20,
           });
           const withPhoto = search.data?.find((p) => p.photoUrl);
           if (withPhoto?.photoUrl) {

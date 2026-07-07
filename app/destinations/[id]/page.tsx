@@ -8,6 +8,7 @@ import { formatUSD } from "@/lib/format";
 import { CostBreakdown } from "@/components/cost-breakdown";
 import { placesProvider, eventsProvider } from "@/lib/providers";
 import type { Place, EventItem } from "@/lib/providers/types";
+import { detectRegionalScope } from "@/lib/destination-scope";
 
 export default async function DestinationDetailPage({
   params,
@@ -32,13 +33,16 @@ export default async function DestinationDetailPage({
   const windowEnd = new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000)
     .toISOString();
 
+  const scope = detectRegionalScope(d.id, d.name);
+
   const [attractionsRes, eventsRes] = await Promise.all([
     places
       ? places.search({
           center: d.coords,
-          radiusMeters: 4500,
           kind: "attractions",
-          limit: 6,
+          regional: scope.regional,
+          regionQuery: scope.regionQuery,
+          limit: 20,
         })
       : Promise.resolve(null),
     events

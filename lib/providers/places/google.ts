@@ -186,19 +186,20 @@ export const googlePlacesProvider: PlacesProvider = {
       };
     }
 
-    // Places API (New) hard limits:
+    // Places API (New) hard limits (both endpoints share the same 50km
+    // circle cap — trying to exceed it produces
+    // "Invalid circle.radius. Radius must be in the range of [0, 50000]"):
     //  - searchNearby.locationRestriction.circle.radius: max 50000m
-    //  - locationBias.circle.radius (searchText): no hard cap, but Google
-    //    treats it as a "typical" bias so results can extend beyond it
+    //  - searchText.locationBias.circle.radius:          max 50000m
     //  - maxResultCount per call: 20
     //
     // Philosophy: false negatives are worse than extras (per user).
-    // Default the nearby radius to the API max, and let regional trips
-    // fall through to text search so a single city's radius doesn't
-    // clip an entire region (e.g. Puglia / Calabria out of "South Italy").
+    // Default the nearby radius to the API max. For regional trips we
+    // skip locationBias entirely — Google's text search understands
+    // region names ("South Italy", "Puglia") and pulls in results
+    // across the whole area without needing a coordinate bias.
     const NEARBY_MAX = 50_000;
     const BIAS_DEFAULT = 40_000;
-    const BIAS_REGIONAL = 200_000;
     const LIMIT_MAX = 20;
 
     // Prefer nearby when we have coords AND the caller isn't asking for
@@ -270,24 +271,35 @@ export const googlePlacesProvider: PlacesProvider = {
       (query.regionQuery
         ? `top ${kindPhrase} in ${query.regionQuery}`
         : `${kindPhrase} near ${query.center.lat},${query.center.lng}`);
+    // Non-regional: bias toward the anchor city (clamped to the 50km
+    // API cap so a caller can't accidentally produce a 400).
+    // Regional: omit locationBias entirely — Google's text search
+    // handles "South Italy" / "Puglia" as regions on its own, and any
+    // circle bias would just re-clip the result set we came here to
+    // avoid clipping.
+    const biasRadius = Math.min(
+      query.radiusMeters ?? BIAS_DEFAULT,
+      NEARBY_MAX,
+    );
+    const textBody: Record<string, unknown> = {
+      textQuery,
+      maxResultCount: Math.min(query.limit ?? LIMIT_MAX, LIMIT_MAX),
+      languageCode: "en",
+    };
+    if (!query.regional) {
+      textBody.locationBias = {
+        circle: {
+          center: {
+            latitude: query.center.lat,
+            longitude: query.center.lng,
+          },
+          radius: biasRadius,
+        },
+      };
+    }
     const result = await callPlaces<{ places?: RawPlace[] }>(
       "places:searchText",
-      {
-        textQuery,
-        maxResultCount: Math.min(query.limit ?? LIMIT_MAX, LIMIT_MAX),
-        languageCode: "en",
-        locationBias: {
-          circle: {
-            center: {
-              latitude: query.center.lat,
-              longitude: query.center.lng,
-            },
-            radius:
-              query.radiusMeters ??
-              (query.regional ? BIAS_REGIONAL : BIAS_DEFAULT),
-          },
-        },
-      },
+      textBody,
     );
 
     if (!result.ok) {

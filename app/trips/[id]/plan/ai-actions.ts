@@ -133,6 +133,7 @@ export async function draftDayPlan(
           kind: "attractions",
           regional: scope.regional,
           regionQuery: scope.regionQuery,
+          countryFilter: resolved?.country ?? undefined,
           limit: 20,
         })
       : Promise.resolve(null),
@@ -142,6 +143,7 @@ export async function draftDayPlan(
           kind: "restaurants",
           regional: scope.regional,
           regionQuery: scope.regionQuery,
+          countryFilter: resolved?.country ?? undefined,
           limit: 20,
         })
       : Promise.resolve(null),

@@ -262,6 +262,7 @@ export default async function PlanPage({
           kind: "attractions",
           regional: scope.regional,
           regionQuery: scope.regionQuery,
+          countryFilter: resolvedDest?.country ?? undefined,
           limit: 20,
         })
       : Promise.resolve(null),

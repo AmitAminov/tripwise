@@ -164,12 +164,31 @@ function searchKey(query: PlaceSearchQuery): string {
   // Bump the leading "v" prefix whenever the default radius / limit /
   // routing logic changes, so old cache entries generated under the
   // narrower scope don't hide the wider results the user asked for.
+  //
+  // v3 adds the countryFilter dimension so a South-Italy search
+  // (Italy-only) doesn't share a cache slot with an un-filtered one.
   const lat = Math.round(query.center.lat * 1000) / 1000;
   const lng = Math.round(query.center.lng * 1000) / 1000;
   const regional = query.regional
     ? `r:${query.regionQuery ?? ""}`
     : "n";
-  return `v2|${query.kind}|${lat},${lng}|${query.radiusMeters ?? "def"}|${query.keyword ?? ""}|${query.limit ?? "def"}|${regional}`;
+  const country = query.countryFilter
+    ? `c:${query.countryFilter.toLowerCase()}`
+    : "";
+  return `v3|${query.kind}|${lat},${lng}|${query.radiusMeters ?? "def"}|${query.keyword ?? ""}|${query.limit ?? "def"}|${regional}|${country}`;
+}
+
+/**
+ * Post-fetch geography filter. When a text search returns places
+ * semantically related to the query but far outside the destination
+ * (Google's text index does this) we drop them here.
+ */
+function applyCountryFilter(places: Place[], filter?: string): Place[] {
+  if (!filter) return places;
+  const needle = filter.toLowerCase();
+  return places.filter((p) =>
+    p.address ? p.address.toLowerCase().includes(needle) : false,
+  );
 }
 
 export const googlePlacesProvider: PlacesProvider = {
@@ -246,9 +265,12 @@ export const googlePlacesProvider: PlacesProvider = {
         };
       }
 
-      const places = (result.data.places ?? [])
-        .map((p) => normalize(p, query.kind))
-        .filter((x): x is Place => x !== null);
+      const places = applyCountryFilter(
+        (result.data.places ?? [])
+          .map((p) => normalize(p, query.kind))
+          .filter((x): x is Place => x !== null),
+        query.countryFilter,
+      );
 
       searchCache.set(cacheKey, places);
       return {
@@ -316,9 +338,12 @@ export const googlePlacesProvider: PlacesProvider = {
       };
     }
 
-    const places = (result.data.places ?? [])
-      .map((p) => normalize(p, query.kind))
-      .filter((x): x is Place => x !== null);
+    const places = applyCountryFilter(
+      (result.data.places ?? [])
+        .map((p) => normalize(p, query.kind))
+        .filter((x): x is Place => x !== null),
+      query.countryFilter,
+    );
 
     searchCache.set(cacheKey, places);
     return {

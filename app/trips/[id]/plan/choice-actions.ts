@@ -38,6 +38,7 @@ interface OptionCtx {
   coords: { lat: number; lng: number } | null;
   regional: boolean;
   regionQuery?: string;
+  countryFilter?: string;
   dayStartIso: string;
   dayEndIso: string;
 }
@@ -58,6 +59,7 @@ const DAY_QUESTION_BANK: QuestionTemplate[] = [
         kind: "attractions",
         regional: ctx.regional,
         regionQuery: ctx.regionQuery,
+        countryFilter: ctx.countryFilter,
         limit: 20,
       });
       return topN(res.data ?? [], OPTIONS_PER_QUESTION).map((p) => ({
@@ -80,6 +82,7 @@ const DAY_QUESTION_BANK: QuestionTemplate[] = [
         kind: "restaurants",
         regional: ctx.regional,
         regionQuery: ctx.regionQuery,
+        countryFilter: ctx.countryFilter,
         limit: 20,
       });
       return topN(res.data ?? [], OPTIONS_PER_QUESTION).map((p) => ({
@@ -128,6 +131,7 @@ const DAY_QUESTION_BANK: QuestionTemplate[] = [
         kind: "bars",
         regional: ctx.regional,
         regionQuery: ctx.regionQuery,
+        countryFilter: ctx.countryFilter,
         limit: 20,
       });
       return topN(res.data ?? [], OPTIONS_PER_QUESTION).map((p) => ({
@@ -235,6 +239,7 @@ export async function draftDayChoices(
     coords,
     regional: scope.regional,
     regionQuery: scope.regionQuery,
+    countryFilter: resolved?.country ?? undefined,
     dayStartIso,
     dayEndIso,
   };

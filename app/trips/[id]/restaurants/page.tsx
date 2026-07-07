@@ -111,6 +111,7 @@ export default async function RestaurantsPage({
       kind,
       regional: scope.regional,
       regionQuery: scope.regionQuery,
+      countryFilter: resolved?.country ?? undefined,
       limit: 20,
     };
   };
@@ -196,7 +197,7 @@ export default async function RestaurantsPage({
 
         <div className="mb-8">
           <div className="text-xs uppercase tracking-widest text-[color:var(--color-muted)] mb-2">
-            Restaurants
+            Yummy
           </div>
           <h1 className="font-serif text-4xl">
             {center?.name ?? trip.destination ?? "Somewhere"}
@@ -231,9 +232,13 @@ export default async function RestaurantsPage({
         )}
 
         {provider && center && anyLive && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {columns.map((col) => (
-              <ColumnCard key={col.key} col={col} />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+            {columns.map((col, i) => (
+              <ColumnCard
+                key={col.key}
+                col={col}
+                isLast={i === columns.length - 1}
+              />
             ))}
           </div>
         )}
@@ -242,13 +247,28 @@ export default async function RestaurantsPage({
   );
 }
 
-function ColumnCard({ col }: { col: Column }) {
+function ColumnCard({ col, isLast }: { col: Column; isLast: boolean }) {
   return (
     <section
       aria-labelledby={`col-${col.key}`}
-      className="min-w-0"
+      // Vertical separators between columns at the lg breakpoint where
+      // we're actually 4-across. Below that we stack, so no divider.
+      // Padding balances the border so cards don't hug it.
+      className={
+        "min-w-0" +
+        (isLast
+          ? " lg:pl-4"
+          : " lg:pl-4 lg:pr-4 lg:border-r lg:border-[color:var(--color-line)]") +
+        " md:pb-6"
+      }
     >
-      <div className="mb-3 pb-2 border-b border-[color:var(--color-line)] flex items-baseline justify-between gap-2">
+      {/*
+        Sticky column header — stays pinned to the viewport top as the
+        user scrolls through a long list. Background matches page bg
+        so cards scrolling underneath don't bleed through. z-10 stays
+        above the cards.
+      */}
+      <div className="sticky top-0 z-10 bg-[color:var(--color-bg)] pt-4 pb-3 mb-3 border-b border-[color:var(--color-line)] flex items-baseline justify-between gap-2">
         <h2
           id={`col-${col.key}`}
           className="font-serif text-xl leading-none"

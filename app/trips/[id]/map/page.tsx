@@ -97,6 +97,7 @@ export default async function TripMapPage({
                 kind,
                 regional: scope.regional,
                 regionQuery: scope.regionQuery,
+                countryFilter: resolved?.country ?? undefined,
                 limit: 20,
               });
               return { kind, res };

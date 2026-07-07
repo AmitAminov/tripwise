@@ -24,13 +24,13 @@ import {
 // keep. The /decisions route still exists for trip-wide decisions
 // that aren't day-scoped (hotel choice, etc.) but is de-emphasized.
 const V2_TABS = [
-  { slug: "flights", label: "Flights", note: "", ready: true },
-  { slug: "attractions", label: "Attractions", note: "", ready: true },
-  { slug: "restaurants", label: "Restaurants", note: "", ready: true },
-  { slug: "hotels", label: "Hotels", note: "", ready: true },
   { slug: "plan", label: "Plan", note: "day-by-day choices + itinerary", ready: true },
-  { slug: "pricing", label: "Prices", note: "aggregated estimates", ready: true },
+  { slug: "attractions", label: "Attractions", note: "", ready: true },
+  { slug: "restaurants", label: "Yummy", note: "", ready: true },
+  { slug: "hotels", label: "Hotels", note: "", ready: true },
+  { slug: "flights", label: "Flights", note: "", ready: true },
   { slug: "events", label: "Events", note: "", ready: true },
+  { slug: "pricing", label: "Prices", note: "aggregated estimates", ready: true },
   { slug: "visuals", label: "Mood", note: "AI generated visuals", ready: true },
 ] as const;
 
@@ -130,6 +130,7 @@ export default async function TripDetailPage({
                 kind,
                 regional: scope.regional,
                 regionQuery: scope.regionQuery,
+                countryFilter: resolvedDest?.country ?? undefined,
                 limit: 20,
               });
               return { kind, res };

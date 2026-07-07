@@ -57,6 +57,7 @@ export default async function AttractionsPage({
       kind,
       regional: scope.regional,
       regionQuery: scope.regionQuery,
+      countryFilter: resolved?.country ?? undefined,
       limit: 20,
     });
   }

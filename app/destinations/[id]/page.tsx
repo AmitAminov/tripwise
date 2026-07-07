@@ -42,6 +42,7 @@ export default async function DestinationDetailPage({
           kind: "attractions",
           regional: scope.regional,
           regionQuery: scope.regionQuery,
+          countryFilter: d.country,
           limit: 20,
         })
       : Promise.resolve(null),

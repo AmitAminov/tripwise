@@ -108,6 +108,16 @@ export interface PlaceSearchQuery {
    */
   regional?: boolean;
   regionQuery?: string;
+  /**
+   * Post-fetch address filter. When set, results whose
+   * `formattedAddress` does NOT contain this string (case-insensitive)
+   * are dropped. Required for regional text search — Google's index
+   * can return places semantically related to the query but located
+   * anywhere in the world (e.g. a Tel Aviv restaurant surfacing on a
+   * "top restaurants in South Italy" search because its reviews
+   * mention Italian cuisine). Pass the destination's country name.
+   */
+  countryFilter?: string;
 }
 
 export interface PlacesProvider {

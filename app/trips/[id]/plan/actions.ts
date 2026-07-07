@@ -120,15 +120,28 @@ export async function addEventToPlan(
   const slot: Slot =
     hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
 
-  const { data: existing } = await supabase
+  // Idempotency check: if the same event is already on this day (any
+  // slot), no-op success. Handles double-clicks on "+ Add", stale UI
+  // state after a page refresh, and background revalidation.
+  const titleForDb = ev.name.slice(0, 200);
+  const { data: dayItems } = await supabase
     .from("itinerary_items")
-    .select("position")
+    .select("id, title, position, slot")
     .eq("trip_id", tripId)
-    .eq("day_index", dayIndex)
-    .eq("slot", slot)
-    .order("position", { ascending: false })
-    .limit(1);
-  const position = (existing?.[0]?.position ?? -1) + 1;
+    .eq("day_index", dayIndex);
+  const wantTitle = titleForDb.toLowerCase();
+  if (
+    (dayItems ?? []).some(
+      (r) => (r.title ?? "").toLowerCase() === wantTitle,
+    )
+  ) {
+    return {};
+  }
+
+  const maxPosInSlot = (dayItems ?? [])
+    .filter((r) => r.slot === slot)
+    .reduce((mx, r) => (r.position > mx ? r.position : mx), -1);
+  const position = maxPosInSlot + 1;
 
   const timeStr = ev.startAt.slice(11, 16);
   const noteParts: string[] = [`Starts ${timeStr}`];
@@ -143,7 +156,7 @@ export async function addEventToPlan(
     day_index: dayIndex,
     slot,
     position,
-    title: ev.name.slice(0, 200),
+    title: titleForDb,
     notes: noteParts.join(" · ").slice(0, 500),
     address: ev.venueName ?? null,
     coords_lat: ev.coordsLat ?? null,

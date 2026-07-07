@@ -112,12 +112,22 @@ export async function POST(request: NextRequest) {
     const slot: Slot = isSlot(it.slot) ? it.slot : "any";
     let startISO: string;
     let endISO: string;
-    if (it.starts_at) {
-      startISO = it.starts_at;
+    const parsedStart = it.starts_at ? new Date(it.starts_at) : null;
+    const startValid =
+      parsedStart !== null && Number.isFinite(parsedStart.getTime());
+    if (startValid && parsedStart) {
+      startISO = it.starts_at as string;
+      const parsedEnd = it.ends_at ? new Date(it.ends_at) : null;
+      const endValid =
+        parsedEnd !== null && Number.isFinite(parsedEnd.getTime());
       endISO =
-        it.ends_at ??
-        iso(new Date(new Date(it.starts_at).getTime() + 60 * 60 * 1000));
+        endValid && parsedEnd
+          ? (it.ends_at as string)
+          : iso(new Date(parsedStart.getTime() + 60 * 60 * 1000));
     } else {
+      // Fallback: slot-based defaults anchored on the trip's start_date.
+      // Also the safe path when a row has a bad ISO in starts_at that
+      // would otherwise throw RangeError when passed to .toISOString().
       const dayDate = offsetDate(trip.start_date!, it.day_index);
       const defs = SLOT_DEFAULTS[slot];
       dayDate.setUTCHours(defs.hour, 0, 0, 0);

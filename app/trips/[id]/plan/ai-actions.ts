@@ -345,3 +345,69 @@ Return JSON matching the schema.`;
   revalidatePath(`/trips/${tripId}/plan`);
   return { added: inserts.length };
 }
+
+/**
+ * Draft EVERY day of the trip in a single click. Fires `draftDayPlan`
+ * for each day in parallel (bounded concurrency so we don't fan out
+ * dozens of Places + Events + Gemini calls at once and blow provider
+ * quotas). Returns aggregate counts + a per-day breakdown so the UI
+ * can render "3/7 days drafted, 4 skipped (already populated)".
+ */
+export async function draftAllDaysPlan(
+  tripId: string,
+): Promise<{
+  error?: string;
+  totalDays?: number;
+  addedByDay?: Array<{ dayIndex: number; added?: number; error?: string }>;
+  totalAdded?: number;
+}> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: trip } = await supabase
+    .from("trips")
+    .select("id, start_date, end_date")
+    .eq("id", tripId)
+    .maybeSingle();
+  if (!trip) return { error: "Trip not found." };
+
+  // Same day-count math the plan page uses. Cap at 30 as a safety
+  // rail — no one drafts 60 days at once, and Gemini + Places both
+  // start pushing back well before that.
+  const start = trip.start_date ? new Date(trip.start_date) : null;
+  const end = trip.end_date ? new Date(trip.end_date) : null;
+  let totalDays = 7;
+  if (start && end && !Number.isNaN(start.valueOf()) && !Number.isNaN(end.valueOf())) {
+    const diff = Math.round(
+      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    totalDays = Math.max(1, Math.min(30, diff + 1));
+  }
+
+  // Bounded concurrency: 3 parallel drafts is a reasonable middle
+  // ground between "fire them all and hope" and "one at a time and
+  // wait forever". Places / events providers are SWR-cached so the
+  // second draft of the day usually reuses inventory the first fetched.
+  const CONCURRENCY = 3;
+  const results: Array<{ dayIndex: number; added?: number; error?: string }> = [];
+  for (let start = 0; start < totalDays; start += CONCURRENCY) {
+    const batch = Array.from(
+      { length: Math.min(CONCURRENCY, totalDays - start) },
+      (_, i) => start + i,
+    );
+    const batchResults = await Promise.all(
+      batch.map(async (dayIndex) => {
+        const res = await draftDayPlan(tripId, dayIndex);
+        return { dayIndex, ...res };
+      }),
+    );
+    results.push(...batchResults);
+  }
+
+  const totalAdded = results.reduce((s, r) => s + (r.added ?? 0), 0);
+  revalidatePath(`/trips/${tripId}/plan`);
+  return { totalDays, addedByDay: results, totalAdded };
+}

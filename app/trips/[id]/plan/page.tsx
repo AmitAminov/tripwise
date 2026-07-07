@@ -6,6 +6,7 @@ import { AddItemForm } from "./add-item-form";
 import { ItineraryItemRow } from "./item-row";
 import { AIDraftButton } from "./ai-draft-button";
 import { CalendarExportButton } from "@/components/calendar-export-button";
+import { DraftTripButton } from "./draft-trip-button";
 import {
   computeDayLegs,
   formatDistance,
@@ -307,19 +308,22 @@ export default async function PlanPage({
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {dirUrl && (
-              <a
-                href={dirUrl}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="btn btn-ghost text-xs"
-                title="Open your plan waypoints in Google Maps (walking directions)"
-              >
-                Open in Google Maps →
-              </a>
-            )}
-            <CalendarExportButton tripId={trip.id} />
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <DraftTripButton tripId={trip.id} />
+            <div className="flex items-center gap-2">
+              {dirUrl && (
+                <a
+                  href={dirUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="btn btn-ghost text-xs"
+                  title="Open your plan waypoints in Google Maps (walking directions)"
+                >
+                  Open in Google Maps →
+                </a>
+              )}
+              <CalendarExportButton tripId={trip.id} />
+            </div>
           </div>
         </div>
 

@@ -89,7 +89,14 @@ export interface Place {
 export interface PlaceSearchQuery {
   center: { lat: number; lng: number };
   radiusMeters?: number;
-  kind: "attractions" | "restaurants" | "cafes" | "bars" | "custom";
+  kind:
+    | "attractions"
+    | "restaurants"
+    | "cafes"
+    | "patisseries"
+    | "wineries"
+    | "bars"
+    | "custom";
   keyword?: string;
   limit?: number;
   /**

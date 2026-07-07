@@ -56,6 +56,10 @@ const CATEGORY_TYPES: Record<PlaceSearchQuery["kind"], string[]> = {
   ],
   restaurants: ["restaurant"],
   cafes: ["cafe", "coffee_shop"],
+  // Bakery + dessert cover patisserie in Places API (New) — there
+  // is no dedicated "patisserie" type in Table A.
+  patisseries: ["bakery", "dessert_shop", "cafe"],
+  wineries: ["winery", "wine_bar"],
   bars: ["bar", "wine_bar"],
   custom: [],
 };

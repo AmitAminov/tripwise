@@ -1,8 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { draftDayPlan } from "./ai-actions";
+import { draftDayChoices } from "./choice-actions";
 
+/**
+ * Per-day "Draft with AI" — populates ONE day with structured MCQ
+ * choices from a bank. Idempotent: if this day already has choices,
+ * clicking is a no-op with a friendly message.
+ */
 export function AIDraftButton({
   tripId,
   dayIndex,
@@ -18,12 +23,16 @@ export function AIDraftButton({
     setError(null);
     setFlash(null);
     startTransition(async () => {
-      const res = await draftDayPlan(tripId, dayIndex);
+      const res = await draftDayChoices(tripId, dayIndex);
       if (res.error) {
         setError(res.error);
-      } else if (res.added) {
+      } else if ((res.created ?? 0) === 0) {
         setFlash(
-          `Added ${res.added} item${res.added === 1 ? "" : "s"}. Edit any that don't fit.`,
+          `Already has choices — pick from them below, or reset the day to redraft.`,
+        );
+      } else {
+        setFlash(
+          `Added ${res.created} choice${res.created === 1 ? "" : "s"}. Pick one option per question.`,
         );
       }
     });
@@ -35,7 +44,7 @@ export function AIDraftButton({
         onClick={draft}
         disabled={pending}
         className="btn btn-ghost text-xs"
-        title="Ask Gemini to sketch this day"
+        title="Populate this day with MCQ choices from real places + events"
       >
         {pending ? "Drafting..." : "✨ Draft with AI"}
       </button>

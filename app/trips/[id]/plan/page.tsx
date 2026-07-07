@@ -18,6 +18,7 @@ import { resolveDestination } from "@/lib/destination-coords";
 import { detectRegionalScope } from "@/lib/destination-scope";
 import { MapView, type MapPin } from "../map/map-view";
 import { EventStrip, type PlanEventItem } from "./event-strip";
+import { DayChoices, type DayChoice, type ChoiceOption } from "./day-choices";
 import type { EventItem } from "@/lib/providers/types";
 
 type Slot = "morning" | "afternoon" | "evening" | "any";
@@ -111,6 +112,86 @@ export default async function PlanPage({
     error != null &&
     /relation .* does not exist|itinerary_items/i.test(error.message);
 
+  // Fetch day-scoped decisions + their options in one round-trip so
+  // each day card can render MCQ choices at the top. Requires
+  // migration 004_decision_day_slot.sql. If the column doesn't exist
+  // (unmigrated env), Supabase will error — swallow it silently so
+  // freeform items still render.
+  const { data: decisionsRaw } = await supabase
+    .from("decisions")
+    .select(
+      "id, title, slot, day_index, winning_option_id, status, options(id, label, notes, url, position)",
+    )
+    .eq("trip_id", id)
+    .not("day_index", "is", null)
+    .order("day_index", { ascending: true })
+    .order("slot", { ascending: true });
+
+  const SLOT_SORT = { morning: 0, afternoon: 1, evening: 2, any: 3 } as const;
+
+  type DecisionRow = {
+    id: string;
+    title: string;
+    slot: string | null;
+    day_index: number;
+    winning_option_id: string | null;
+    status: string;
+    options?: Array<{
+      id: string;
+      label: string;
+      notes: string | null;
+      url: string | null;
+      position: number;
+    }>;
+  };
+
+  const choicesByDay = new Map<number, DayChoice[]>();
+  for (const raw of (decisionsRaw ?? []) as DecisionRow[]) {
+    if (raw.day_index == null) continue;
+    const slotRaw = raw.slot ?? "any";
+    const slot: DayChoice["slot"] =
+      slotRaw === "morning" ||
+      slotRaw === "afternoon" ||
+      slotRaw === "evening" ||
+      slotRaw === "any"
+        ? (slotRaw as DayChoice["slot"])
+        : "any";
+    const options: ChoiceOption[] = (raw.options ?? [])
+      .slice()
+      .sort((a, b) => a.position - b.position)
+      .map((o) => ({
+        id: o.id,
+        label: o.label,
+        notes: o.notes,
+        url: o.url,
+        position: o.position,
+      }));
+    if (options.length < 2) continue;
+    const choice: DayChoice = {
+      id: raw.id,
+      title: raw.title,
+      slot,
+      winningOptionId: raw.winning_option_id,
+      options,
+    };
+    const arr = choicesByDay.get(raw.day_index) ?? [];
+    arr.push(choice);
+    choicesByDay.set(raw.day_index, arr);
+  }
+  // Stable slot order within a day.
+  for (const [di, list] of choicesByDay) {
+    list.sort((a, b) => SLOT_SORT[a.slot] - SLOT_SORT[b.slot]);
+    choicesByDay.set(di, list);
+  }
+
+  // Filter itinerary items that were inserted by pickChoice — they're
+  // tagged `[choice:{decisionId}]` in notes. Rendering both the item
+  // row AND the highlighted MCQ pick would double up.
+  const choiceItemRe = /\[choice:[a-f0-9-]+\]/i;
+  const freeformItems = items.filter(
+    (it) => !(it.notes && choiceItemRe.test(it.notes)),
+  );
+
   // For each day, compute walking legs between consecutive items that
   // both have coords. In parallel across days so the page still renders
   // even if Routes is temperamental. Track per-day availability so we
@@ -124,7 +205,7 @@ export default async function PlanPage({
     resolveDestination(trip.destination),
     Promise.all(
       Array.from({ length: totalDays }).map(async (_, dayIndex) => {
-        const dayItems = items.filter((i) => i.day_index === dayIndex);
+        const dayItems = freeformItems.filter((i) => i.day_index === dayIndex);
         const ordered = orderForDay(dayItems);
         const points = ordered
           .filter((i) => i.coords_lat != null && i.coords_lng != null)
@@ -396,8 +477,12 @@ export default async function PlanPage({
 
         <div className="space-y-4">
           {Array.from({ length: totalDays }).map((_, dayIndex) => {
-            const dayItems = items.filter((i) => i.day_index === dayIndex);
+            const dayItems = freeformItems.filter((i) => i.day_index === dayIndex);
             const ordered = orderForDay(dayItems);
+            const dayChoices = choicesByDay.get(dayIndex) ?? [];
+            const decidedCount = dayChoices.filter(
+              (c) => c.winningOptionId,
+            ).length;
             const withCoords = ordered.filter(
               (i) => i.coords_lat != null && i.coords_lng != null,
             );
@@ -435,11 +520,25 @@ export default async function PlanPage({
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-[color:var(--color-muted)]">
-                      {dayItems.length} item{dayItems.length === 1 ? "" : "s"}
+                      {dayChoices.length > 0 && (
+                        <>
+                          {decidedCount}/{dayChoices.length} choice
+                          {dayChoices.length === 1 ? "" : "s"}
+                          {dayItems.length > 0 && " · "}
+                        </>
+                      )}
+                      {dayItems.length > 0 && (
+                        <>
+                          {dayItems.length} extra
+                          {dayItems.length === 1 ? "" : "s"}
+                        </>
+                      )}
                     </span>
                     <AIDraftButton tripId={trip.id} dayIndex={dayIndex} />
                   </div>
                 </header>
+
+                <DayChoices tripId={trip.id} choices={dayChoices} />
 
                 <EventStrip
                   tripId={trip.id}

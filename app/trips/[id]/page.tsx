@@ -24,13 +24,13 @@ import {
 // keep. The /decisions route still exists for trip-wide decisions
 // that aren't day-scoped (hotel choice, etc.) but is de-emphasized.
 const V2_TABS = [
-  { slug: "flights", label: "Flights", note: "real prices, converted to USD", ready: true },
-  { slug: "attractions", label: "Attractions", note: "Google Places (New)", ready: true },
-  { slug: "attractions?kind=restaurants", label: "Restaurants", note: "Google Places (New)", ready: true },
-  { slug: "hotels", label: "Hotels", note: "estimates + deep links", ready: true },
+  { slug: "flights", label: "Flights", note: "", ready: true },
+  { slug: "attractions", label: "Attractions", note: "", ready: true },
+  { slug: "attractions?kind=restaurants", label: "Restaurants", note: "", ready: true },
+  { slug: "hotels", label: "Hotels", note: "", ready: true },
   { slug: "plan", label: "Plan", note: "day-by-day choices + itinerary", ready: true },
   { slug: "pricing", label: "Prices", note: "aggregated estimates", ready: true },
-  { slug: "events", label: "Events", note: "curated + Ticketmaster (opt.)", ready: true },
+  { slug: "events", label: "Events", note: "", ready: true },
   { slug: "visuals", label: "Mood", note: "AI generated visuals", ready: true },
 ] as const;
 
@@ -295,9 +295,11 @@ export default async function TripDetailPage({
                         className="card block p-4 h-full"
                       >
                         <div className="font-medium mb-1">{tab.label}</div>
-                        <div className="text-xs text-[color:var(--color-muted)]">
-                          {tab.note}
-                        </div>
+                        {tab.note && (
+                          <div className="text-xs text-[color:var(--color-muted)]">
+                            {tab.note}
+                          </div>
+                        )}
                         <div className="text-[10px] uppercase tracking-widest text-[color:var(--color-accent)] mt-3">
                           Ready →
                         </div>
@@ -307,9 +309,11 @@ export default async function TripDetailPage({
                     <li key={tab.slug}>
                       <div className="card p-4 h-full opacity-60">
                         <div className="font-medium mb-1">{tab.label}</div>
-                        <div className="text-xs text-[color:var(--color-muted)]">
-                          {tab.note}
-                        </div>
+                        {tab.note && (
+                          <div className="text-xs text-[color:var(--color-muted)]">
+                            {tab.note}
+                          </div>
+                        )}
                         <div className="text-[10px] uppercase tracking-widest text-[color:var(--color-highlight)] mt-3">
                           Coming soon
                         </div>

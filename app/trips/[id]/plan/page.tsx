@@ -112,20 +112,55 @@ export default async function PlanPage({
     error != null &&
     /relation .* does not exist|itinerary_items/i.test(error.message);
 
-  // Fetch day-scoped decisions + their options in one round-trip so
-  // each day card can render MCQ choices at the top. Requires
-  // migration 004_decision_day_slot.sql. If the column doesn't exist
-  // (unmigrated env), Supabase will error — swallow it silently so
-  // freeform items still render.
+  // Fetch day-scoped decisions + their options in TWO round-trips.
+  //
+  // Why not one nested `.select("...", options(...))`? Because there
+  // are two FKs between decisions and options (options.decision_id →
+  // decisions.id AND decisions.winning_option_id → options.id), and
+  // PostgREST can't guess which relationship the nested select means.
+  // The join silently returns no options → the plan looks empty even
+  // when 16 choices sit in the DB. Two explicit queries dodge that.
+  //
+  // Requires migration 004_decision_day_slot.sql. Un-migrated envs
+  // will error on the .not("day_index", ...) filter; swallow and
+  // render freeform items only.
   const { data: decisionsRaw } = await supabase
     .from("decisions")
-    .select(
-      "id, title, slot, day_index, winning_option_id, status, options(id, label, notes, url, position)",
-    )
+    .select("id, title, slot, day_index, winning_option_id, status")
     .eq("trip_id", id)
     .not("day_index", "is", null)
-    .order("day_index", { ascending: true })
-    .order("slot", { ascending: true });
+    .order("day_index", { ascending: true });
+
+  const decisionIds = (decisionsRaw ?? []).map((d) => d.id as string);
+  let optionsRaw: Array<{
+    id: string;
+    decision_id: string;
+    label: string;
+    notes: string | null;
+    url: string | null;
+    position: number;
+  }> = [];
+  if (decisionIds.length > 0) {
+    const { data: optsData } = await supabase
+      .from("options")
+      .select("id, decision_id, label, notes, url, position")
+      .in("decision_id", decisionIds)
+      .order("position", { ascending: true });
+    optionsRaw = optsData ?? [];
+  }
+
+  const optionsByDecision = new Map<string, ChoiceOption[]>();
+  for (const o of optionsRaw) {
+    const arr = optionsByDecision.get(o.decision_id) ?? [];
+    arr.push({
+      id: o.id,
+      label: o.label,
+      notes: o.notes,
+      url: o.url,
+      position: o.position,
+    });
+    optionsByDecision.set(o.decision_id, arr);
+  }
 
   const SLOT_SORT = { morning: 0, afternoon: 1, evening: 2, any: 3 } as const;
 
@@ -136,13 +171,6 @@ export default async function PlanPage({
     day_index: number;
     winning_option_id: string | null;
     status: string;
-    options?: Array<{
-      id: string;
-      label: string;
-      notes: string | null;
-      url: string | null;
-      position: number;
-    }>;
   };
 
   const choicesByDay = new Map<number, DayChoice[]>();
@@ -156,16 +184,7 @@ export default async function PlanPage({
       slotRaw === "any"
         ? (slotRaw as DayChoice["slot"])
         : "any";
-    const options: ChoiceOption[] = (raw.options ?? [])
-      .slice()
-      .sort((a, b) => a.position - b.position)
-      .map((o) => ({
-        id: o.id,
-        label: o.label,
-        notes: o.notes,
-        url: o.url,
-        position: o.position,
-      }));
+    const options = optionsByDecision.get(raw.id) ?? [];
     if (options.length < 2) continue;
     const choice: DayChoice = {
       id: raw.id,

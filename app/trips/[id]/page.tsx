@@ -12,9 +12,9 @@ const V2_TABS = [
   { slug: "hotels", label: "Hotels", note: "estimates + deep links", ready: true },
   { slug: "plan", label: "Day plan", note: "day-by-day itinerary", ready: true },
   { slug: "map", label: "Map", note: "pins + day filter", ready: true },
-  { slug: "pricing", label: "Pricing dashboard", note: "aggregated estimates", ready: true },
+  { slug: "pricing", label: "Prices", note: "aggregated estimates", ready: true },
   { slug: "events", label: "Events", note: "curated + Ticketmaster (opt.)", ready: true },
-  { slug: "visuals", label: "AI Visuals", note: "Nano Banana mood board", ready: true },
+  { slug: "visuals", label: "Mood", note: "AI generated visuals", ready: true },
   { slug: "decisions", label: "Decisions", note: "the reveal mechanic", ready: true },
 ] as const;
 

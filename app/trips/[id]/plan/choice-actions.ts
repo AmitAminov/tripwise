@@ -3,7 +3,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
-import { detectRegionalScope } from "@/lib/destination-scope";
+import { detectRegionalScope, type Direction } from "@/lib/destination-scope";
+import { centroidFor } from "@/lib/country-centroids";
 import { revalidatePath } from "next/cache";
 
 type Slot = "morning" | "afternoon" | "evening" | "any";
@@ -39,6 +40,7 @@ interface OptionCtx {
   regional: boolean;
   regionQuery?: string;
   countryFilter?: string;
+  directionFilter?: { direction: Direction; centroid: { lat: number; lng: number } };
   dayStartIso: string;
   dayEndIso: string;
 }
@@ -60,6 +62,7 @@ const DAY_QUESTION_BANK: QuestionTemplate[] = [
         regional: ctx.regional,
         regionQuery: ctx.regionQuery,
         countryFilter: ctx.countryFilter,
+        directionFilter: ctx.directionFilter,
         limit: 20,
       });
       return topN(res.data ?? [], OPTIONS_PER_QUESTION).map((p) => ({
@@ -83,6 +86,7 @@ const DAY_QUESTION_BANK: QuestionTemplate[] = [
         regional: ctx.regional,
         regionQuery: ctx.regionQuery,
         countryFilter: ctx.countryFilter,
+        directionFilter: ctx.directionFilter,
         limit: 20,
       });
       return topN(res.data ?? [], OPTIONS_PER_QUESTION).map((p) => ({
@@ -132,6 +136,7 @@ const DAY_QUESTION_BANK: QuestionTemplate[] = [
         regional: ctx.regional,
         regionQuery: ctx.regionQuery,
         countryFilter: ctx.countryFilter,
+        directionFilter: ctx.directionFilter,
         limit: 20,
       });
       return topN(res.data ?? [], OPTIONS_PER_QUESTION).map((p) => ({
@@ -234,12 +239,17 @@ export async function draftDayChoices(
     ? new Date(dayStartIso).toISOString().slice(0, 10)
     : `Day ${dayIndex + 1}`;
 
+  const centroid = centroidFor(resolved?.country);
   const ctx: OptionCtx = {
     city: destination,
     coords,
     regional: scope.regional,
     regionQuery: scope.regionQuery,
     countryFilter: resolved?.country ?? undefined,
+    directionFilter:
+      scope.direction && centroid
+        ? { direction: scope.direction, centroid }
+        : undefined,
     dayStartIso,
     dayEndIso,
   };

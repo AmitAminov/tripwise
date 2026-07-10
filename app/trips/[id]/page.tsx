@@ -3,10 +3,12 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { InvitePanel } from "./invite-panel";
+import { CornerstoneIcon } from "@/components/cornerstone-icon";
 import { formatDateRange } from "@/lib/format";
 import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { detectRegionalScope } from "@/lib/destination-scope";
+import { centroidFor } from "@/lib/country-centroids";
 import { MapView, type MapPin } from "./map/map-view";
 import { KindsPicker } from "./map/kinds-picker";
 import {
@@ -34,16 +36,26 @@ const V2_TABS = [
   { slug: "visuals", label: "Mood", note: "AI generated visuals", ready: true },
 ] as const;
 
+// Default: all four place kinds pre-selected so the sticky map is
+// populated on first render. Events opt-in (different provider,
+// date-window sensitive).
+const DEFAULT_KINDS: PickableKind[] = [
+  "attractions",
+  "restaurants",
+  "cafes",
+  "bars",
+];
+
 function parseKinds(raw: string | string[] | undefined): PickableKind[] {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value) return ["attractions"];
+  if (!value) return DEFAULT_KINDS;
   const picked = value
     .split(",")
     .map((k) => k.trim().toLowerCase())
     .filter((k): k is PickableKind =>
       (PICKABLE_KINDS as readonly string[]).includes(k),
     );
-  return picked.length > 0 ? picked : ["attractions"];
+  return picked.length > 0 ? picked : DEFAULT_KINDS;
 }
 
 export default async function TripDetailPage({
@@ -131,6 +143,13 @@ export default async function TripDetailPage({
                 regional: scope.regional,
                 regionQuery: scope.regionQuery,
                 countryFilter: resolvedDest?.country ?? undefined,
+                directionFilter:
+                  scope.direction && centroidFor(resolvedDest?.country)
+                    ? {
+                        direction: scope.direction,
+                        centroid: centroidFor(resolvedDest?.country)!,
+                      }
+                    : undefined,
                 limit: 20,
               });
               return { kind, res };
@@ -293,30 +312,50 @@ export default async function TripDetailPage({
                     <li key={tab.slug}>
                       <Link
                         href={`/trips/${trip.id}/${tab.slug}`}
-                        className="card block p-4 h-full"
+                        className="card block p-4 h-full group"
                       >
-                        <div className="font-medium mb-1">{tab.label}</div>
-                        {tab.note && (
-                          <div className="text-xs text-[color:var(--color-muted)]">
-                            {tab.note}
+                        <div className="flex items-start gap-3">
+                          <span
+                            className="shrink-0 text-[color:var(--color-fg-2)] group-hover:text-[color:var(--color-primary)] transition-colors"
+                            aria-hidden
+                          >
+                            <CornerstoneIcon slug={tab.slug} size={30} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium mb-1">{tab.label}</div>
+                            {tab.note && (
+                              <div className="text-xs text-[color:var(--color-muted)]">
+                                {tab.note}
+                              </div>
+                            )}
+                            <div className="text-[10px] uppercase tracking-widest text-[color:var(--color-accent)] mt-3">
+                              Ready →
+                            </div>
                           </div>
-                        )}
-                        <div className="text-[10px] uppercase tracking-widest text-[color:var(--color-accent)] mt-3">
-                          Ready →
                         </div>
                       </Link>
                     </li>
                   ) : (
                     <li key={tab.slug}>
                       <div className="card p-4 h-full opacity-60">
-                        <div className="font-medium mb-1">{tab.label}</div>
-                        {tab.note && (
-                          <div className="text-xs text-[color:var(--color-muted)]">
-                            {tab.note}
+                        <div className="flex items-start gap-3">
+                          <span
+                            className="shrink-0 text-[color:var(--color-fg-2)]"
+                            aria-hidden
+                          >
+                            <CornerstoneIcon slug={tab.slug} size={30} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium mb-1">{tab.label}</div>
+                            {tab.note && (
+                              <div className="text-xs text-[color:var(--color-muted)]">
+                                {tab.note}
+                              </div>
+                            )}
+                            <div className="text-[10px] uppercase tracking-widest text-[color:var(--color-highlight)] mt-3">
+                              Coming soon
+                            </div>
                           </div>
-                        )}
-                        <div className="text-[10px] uppercase tracking-widest text-[color:var(--color-highlight)] mt-3">
-                          Coming soon
                         </div>
                       </div>
                     </li>

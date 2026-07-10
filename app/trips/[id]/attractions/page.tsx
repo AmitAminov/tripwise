@@ -6,6 +6,7 @@ import { Header } from "@/components/header";
 import { placesProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { detectRegionalScope } from "@/lib/destination-scope";
+import { centroidFor } from "@/lib/country-centroids";
 import { SendToArenaButton } from "@/components/send-to-arena-button";
 
 function firstStr(v: string | string[] | undefined): string | undefined {
@@ -52,12 +53,17 @@ export default async function AttractionsPage({
   > | null = null;
   if (provider && coords) {
     const scope = detectRegionalScope(null, trip.destination);
+    const centroid = centroidFor(resolved?.country);
     result = await provider.search({
       center: { lat: coords.lat, lng: coords.lng },
       kind,
       regional: scope.regional,
       regionQuery: scope.regionQuery,
       countryFilter: resolved?.country ?? undefined,
+      directionFilter:
+        scope.direction && centroid
+          ? { direction: scope.direction, centroid }
+          : undefined,
       limit: 20,
     });
   }

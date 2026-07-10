@@ -6,6 +6,7 @@ import { Header } from "@/components/header";
 import { placesProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { detectRegionalScope } from "@/lib/destination-scope";
+import { centroidFor } from "@/lib/country-centroids";
 import type { Place, PlaceSearchQuery } from "@/lib/providers/types";
 
 /**
@@ -102,6 +103,12 @@ export default async function RestaurantsPage({
   // detectRegionalScope routes each of them through searchText so we
   // don't miss picks outside a 50km circle around the anchor city.
   const scope = detectRegionalScope(null, trip.destination);
+  const centroid = centroidFor(resolved?.country);
+  const directionFilter =
+    scope.direction && centroid
+      ? { direction: scope.direction, centroid }
+      : undefined;
+
   const baseQuery = (
     kind: PlaceSearchQuery["kind"],
   ): PlaceSearchQuery | null => {
@@ -112,6 +119,7 @@ export default async function RestaurantsPage({
       regional: scope.regional,
       regionQuery: scope.regionQuery,
       countryFilter: resolved?.country ?? undefined,
+      directionFilter,
       limit: 20,
     };
   };

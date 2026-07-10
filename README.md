@@ -1,5 +1,7 @@
 # TripWise
 
+[![CI](https://github.com/AmitAminov/tripwise/actions/workflows/ci.yml/badge.svg)](https://github.com/AmitAminov/tripwise/actions/workflows/ci.yml)
+
 A trip planner for couples that fixes the worst part of planning together:
 one partner's opinion anchoring the other's. TripWise lets both people rate
 flights, hotels, and activities **blind**, then reveals both sets of ratings

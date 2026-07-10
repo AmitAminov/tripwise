@@ -10,6 +10,11 @@ at once — enforced in the database, not the UI.
 Built with Next.js 15 / React 19 / TypeScript on Supabase, plus a small
 Python FastAPI microservice for live flight prices.
 
+I built TripWise quickly with an AI-assisted (vibe-coding) workflow to plan an
+autumn trip to Italy with my girlfriend — the trip below is that real one.
+
+![TripWise — the South Italy trip: map and cornerstones](docs/screenshots/trip.png)
+
 ## The problem
 
 Couples planning a trip juggle dozens of tabs (flights, hotels, weather,

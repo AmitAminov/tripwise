@@ -5,6 +5,7 @@ import { Header } from "@/components/header";
 import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { detectRegionalScope } from "@/lib/destination-scope";
+import { centroidFor } from "@/lib/country-centroids";
 import { MapView, type MapPin } from "./map-view";
 import { KindsPicker } from "./kinds-picker";
 import {
@@ -15,16 +16,26 @@ import {
   type PlacesKind,
 } from "./kinds";
 
+// Default: all four place kinds pre-selected so the map is populated
+// out of the gate. Events opt-in because it fires a different
+// provider + is date-window sensitive.
+const DEFAULT_KINDS: PickableKind[] = [
+  "attractions",
+  "restaurants",
+  "cafes",
+  "bars",
+];
+
 function parseKinds(raw: string | string[] | undefined): PickableKind[] {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value) return ["attractions"];
+  if (!value) return DEFAULT_KINDS;
   const picked = value
     .split(",")
     .map((k) => k.trim().toLowerCase())
     .filter((k): k is PickableKind =>
       (PICKABLE_KINDS as readonly string[]).includes(k),
     );
-  return picked.length > 0 ? picked : ["attractions"];
+  return picked.length > 0 ? picked : DEFAULT_KINDS;
 }
 
 export default async function TripMapPage({
@@ -92,12 +103,18 @@ export default async function TripMapPage({
       provider
         ? Promise.all(
             placesKinds.map(async (kind) => {
+              const centroid = centroidFor(resolved?.country);
+              const directionFilter =
+                scope.direction && centroid
+                  ? { direction: scope.direction, centroid }
+                  : undefined;
               const res = await provider.search({
                 center: { lat: center.lat, lng: center.lng },
                 kind,
                 regional: scope.regional,
                 regionQuery: scope.regionQuery,
                 countryFilter: resolved?.country ?? undefined,
+                directionFilter,
                 limit: 20,
               });
               return { kind, res };

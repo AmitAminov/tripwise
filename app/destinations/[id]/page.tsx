@@ -9,6 +9,7 @@ import { CostBreakdown } from "@/components/cost-breakdown";
 import { placesProvider, eventsProvider } from "@/lib/providers";
 import type { Place, EventItem } from "@/lib/providers/types";
 import { detectRegionalScope } from "@/lib/destination-scope";
+import { centroidFor } from "@/lib/country-centroids";
 
 export default async function DestinationDetailPage({
   params,
@@ -43,6 +44,10 @@ export default async function DestinationDetailPage({
           regional: scope.regional,
           regionQuery: scope.regionQuery,
           countryFilter: d.country,
+          directionFilter:
+            scope.direction && centroidFor(d.country)
+              ? { direction: scope.direction, centroid: centroidFor(d.country)! }
+              : undefined,
           limit: 20,
         })
       : Promise.resolve(null),

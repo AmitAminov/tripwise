@@ -5,6 +5,7 @@ import { generateText } from "@/lib/ai/gemini";
 import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { detectRegionalScope } from "@/lib/destination-scope";
+import { centroidFor } from "@/lib/country-centroids";
 import { geocode } from "@/lib/geocoding";
 import type { EventItem } from "@/lib/providers/types";
 import { revalidatePath } from "next/cache";
@@ -125,6 +126,11 @@ export async function draftDayPlan(
   const eventsCity = destination;
 
   const scope = detectRegionalScope(null, destination);
+  const centroid = centroidFor(resolved?.country);
+  const directionFilter =
+    scope.direction && centroid
+      ? { direction: scope.direction, centroid }
+      : undefined;
 
   const [attractionsRes, restaurantsRes, eventsRes] = await Promise.all([
     provider && coords
@@ -134,6 +140,7 @@ export async function draftDayPlan(
           regional: scope.regional,
           regionQuery: scope.regionQuery,
           countryFilter: resolved?.country ?? undefined,
+          directionFilter,
           limit: 20,
         })
       : Promise.resolve(null),
@@ -144,6 +151,7 @@ export async function draftDayPlan(
           regional: scope.regional,
           regionQuery: scope.regionQuery,
           countryFilter: resolved?.country ?? undefined,
+          directionFilter,
           limit: 20,
         })
       : Promise.resolve(null),

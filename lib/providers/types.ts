@@ -118,6 +118,18 @@ export interface PlaceSearchQuery {
    * mention Italian cuisine). Pass the destination's country name.
    */
   countryFilter?: string;
+  /**
+   * Post-fetch half-space filter around the country's centroid. Used
+   * when the destination has a cardinal-direction word ("south italy"
+   * → south of Italy's centroid, "eastern japan" → east of Japan's
+   * centroid). Places whose coords are on the wrong side of the
+   * centroid axis get dropped. Country-wide entries and non-directional
+   * destinations do not set this.
+   */
+  directionFilter?: {
+    direction: "north" | "south" | "east" | "west";
+    centroid: { lat: number; lng: number };
+  };
 }
 
 export interface PlacesProvider {

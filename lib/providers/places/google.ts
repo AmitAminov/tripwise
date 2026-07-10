@@ -165,8 +165,8 @@ function searchKey(query: PlaceSearchQuery): string {
   // routing logic changes, so old cache entries generated under the
   // narrower scope don't hide the wider results the user asked for.
   //
-  // v3 adds the countryFilter dimension so a South-Italy search
-  // (Italy-only) doesn't share a cache slot with an un-filtered one.
+  // v4 adds the directionFilter dimension so a South-Italy search
+  // doesn't share a cache slot with a non-directional Italy search.
   const lat = Math.round(query.center.lat * 1000) / 1000;
   const lng = Math.round(query.center.lng * 1000) / 1000;
   const regional = query.regional
@@ -175,7 +175,10 @@ function searchKey(query: PlaceSearchQuery): string {
   const country = query.countryFilter
     ? `c:${query.countryFilter.toLowerCase()}`
     : "";
-  return `v3|${query.kind}|${lat},${lng}|${query.radiusMeters ?? "def"}|${query.keyword ?? ""}|${query.limit ?? "def"}|${regional}|${country}`;
+  const dir = query.directionFilter
+    ? `d:${query.directionFilter.direction}:${Math.round(query.directionFilter.centroid.lat * 10) / 10},${Math.round(query.directionFilter.centroid.lng * 10) / 10}`
+    : "";
+  return `v4|${query.kind}|${lat},${lng}|${query.radiusMeters ?? "def"}|${query.keyword ?? ""}|${query.limit ?? "def"}|${regional}|${country}|${dir}`;
 }
 
 /**
@@ -189,6 +192,32 @@ function applyCountryFilter(places: Place[], filter?: string): Place[] {
   return places.filter((p) =>
     p.address ? p.address.toLowerCase().includes(needle) : false,
   );
+}
+
+/**
+ * Post-fetch half-space filter around a country's centroid. Drops
+ * places on the wrong side of the axis for the requested direction
+ * ("south italy" → keep only places with lat < Italy centroid.lat).
+ */
+function applyDirectionFilter(
+  places: Place[],
+  filter?: PlaceSearchQuery["directionFilter"],
+): Place[] {
+  if (!filter) return places;
+  const { direction, centroid } = filter;
+  return places.filter((p) => {
+    const { lat, lng } = p.coords;
+    switch (direction) {
+      case "south":
+        return lat < centroid.lat;
+      case "north":
+        return lat > centroid.lat;
+      case "east":
+        return lng > centroid.lng;
+      case "west":
+        return lng < centroid.lng;
+    }
+  });
 }
 
 export const googlePlacesProvider: PlacesProvider = {
@@ -265,11 +294,14 @@ export const googlePlacesProvider: PlacesProvider = {
         };
       }
 
-      const places = applyCountryFilter(
-        (result.data.places ?? [])
-          .map((p) => normalize(p, query.kind))
-          .filter((x): x is Place => x !== null),
-        query.countryFilter,
+      const places = applyDirectionFilter(
+        applyCountryFilter(
+          (result.data.places ?? [])
+            .map((p) => normalize(p, query.kind))
+            .filter((x): x is Place => x !== null),
+          query.countryFilter,
+        ),
+        query.directionFilter,
       );
 
       searchCache.set(cacheKey, places);
@@ -338,11 +370,14 @@ export const googlePlacesProvider: PlacesProvider = {
       };
     }
 
-    const places = applyCountryFilter(
-      (result.data.places ?? [])
-        .map((p) => normalize(p, query.kind))
-        .filter((x): x is Place => x !== null),
-      query.countryFilter,
+    const places = applyDirectionFilter(
+      applyCountryFilter(
+        (result.data.places ?? [])
+          .map((p) => normalize(p, query.kind))
+          .filter((x): x is Place => x !== null),
+        query.countryFilter,
+      ),
+      query.directionFilter,
     );
 
     searchCache.set(cacheKey, places);

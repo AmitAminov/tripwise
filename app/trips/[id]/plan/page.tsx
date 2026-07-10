@@ -16,6 +16,7 @@ import {
 import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { detectRegionalScope } from "@/lib/destination-scope";
+import { centroidFor } from "@/lib/country-centroids";
 import { MapView, type MapPin } from "../map/map-view";
 import { EventStrip, type PlanEventItem } from "./event-strip";
 import { DayChoices, type DayChoice, type ChoiceOption } from "./day-choices";
@@ -263,6 +264,13 @@ export default async function PlanPage({
           regional: scope.regional,
           regionQuery: scope.regionQuery,
           countryFilter: resolvedDest?.country ?? undefined,
+          directionFilter:
+            scope.direction && centroidFor(resolvedDest?.country)
+              ? {
+                  direction: scope.direction,
+                  centroid: centroidFor(resolvedDest?.country)!,
+                }
+              : undefined,
           limit: 20,
         })
       : Promise.resolve(null),

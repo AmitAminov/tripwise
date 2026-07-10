@@ -8,6 +8,7 @@ import { formatDateRange } from "@/lib/format";
 import { placesProvider, eventsProvider } from "@/lib/providers";
 import { resolveDestination } from "@/lib/destination-coords";
 import { detectRegionalScope } from "@/lib/destination-scope";
+import { centroidFor } from "@/lib/country-centroids";
 import { MapView, type MapPin } from "./map/map-view";
 import { KindsPicker } from "./map/kinds-picker";
 import {
@@ -35,16 +36,26 @@ const V2_TABS = [
   { slug: "visuals", label: "Mood", note: "AI generated visuals", ready: true },
 ] as const;
 
+// Default: all four place kinds pre-selected so the sticky map is
+// populated on first render. Events opt-in (different provider,
+// date-window sensitive).
+const DEFAULT_KINDS: PickableKind[] = [
+  "attractions",
+  "restaurants",
+  "cafes",
+  "bars",
+];
+
 function parseKinds(raw: string | string[] | undefined): PickableKind[] {
   const value = Array.isArray(raw) ? raw[0] : raw;
-  if (!value) return ["attractions"];
+  if (!value) return DEFAULT_KINDS;
   const picked = value
     .split(",")
     .map((k) => k.trim().toLowerCase())
     .filter((k): k is PickableKind =>
       (PICKABLE_KINDS as readonly string[]).includes(k),
     );
-  return picked.length > 0 ? picked : ["attractions"];
+  return picked.length > 0 ? picked : DEFAULT_KINDS;
 }
 
 export default async function TripDetailPage({
@@ -132,6 +143,13 @@ export default async function TripDetailPage({
                 regional: scope.regional,
                 regionQuery: scope.regionQuery,
                 countryFilter: resolvedDest?.country ?? undefined,
+                directionFilter:
+                  scope.direction && centroidFor(resolvedDest?.country)
+                    ? {
+                        direction: scope.direction,
+                        centroid: centroidFor(resolvedDest?.country)!,
+                      }
+                    : undefined,
                 limit: 20,
               });
               return { kind, res };

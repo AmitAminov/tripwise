@@ -72,9 +72,32 @@ const COUNTRY_HINTS = [
   "new zealand",
 ];
 
+export type Direction = "north" | "south" | "east" | "west";
+
 export interface RegionalHint {
   regional: boolean;
   regionQuery?: string;
+  /**
+   * When the destination text carries a cardinal-direction word
+   * ("south italy", "northern france", "east japan", "western spain"),
+   * the caller can use this together with the country's centroid to
+   * hard-filter results to the correct half of the country. Country-
+   * wide entries (`italy_wide`) intentionally omit this.
+   */
+  direction?: Direction;
+}
+
+// Regex captures either "south italy" / "southern italy" / "south of italy"
+// as well as the reverse phrasing "italy south". Country name is
+// whatever comes after the direction (or before, in the second case).
+const DIRECTION_RE = /(?:^|\s)(north|northern|south|southern|east|eastern|west|western)(?:\s+of)?\s+([a-z][a-z\s]*)/i;
+
+function normalizeDirection(word: string): Direction {
+  const w = word.toLowerCase();
+  if (w.startsWith("north")) return "north";
+  if (w.startsWith("south")) return "south";
+  if (w.startsWith("east")) return "east";
+  return "west";
 }
 
 /**
@@ -87,24 +110,52 @@ export function detectRegionalScope(
   destinationText: string | null | undefined,
 ): RegionalHint {
   const idLower = (id ?? "").toLowerCase();
+
+  // Extract direction from either the id (`south_italy`) or the free
+  // text (`"South Italy"` / `"Northern France"`). Applied to every
+  // return path so a country-wide + directional trip still gets it.
+  let direction: Direction | undefined;
+  if (idLower.startsWith("south_")) direction = "south";
+  else if (idLower.startsWith("north_")) direction = "north";
+  else if (idLower.startsWith("east_")) direction = "east";
+  else if (idLower.startsWith("west_")) direction = "west";
+  else {
+    const m = (destinationText ?? "").match(DIRECTION_RE);
+    if (m) direction = normalizeDirection(m[1]);
+  }
+
   if (idLower.endsWith("_wide")) {
+    // Country-wide entries mean "all of the country" — no direction
+    // filter even if a stray "south" is somewhere in the text.
     return {
       regional: true,
       regionQuery: destinationText || prettifyId(idLower),
     };
   }
   if (REGIONAL_ID_PREFIXES.some((p) => idLower === p || idLower.startsWith(p + "_"))) {
-    return { regional: true, regionQuery: destinationText || prettifyId(idLower) };
+    return {
+      regional: true,
+      regionQuery: destinationText || prettifyId(idLower),
+      direction,
+    };
   }
   const text = (destinationText ?? "").trim().toLowerCase();
   if (!text) return { regional: false };
   if (REGION_HINTS.some((h) => text.includes(h))) {
-    return { regional: true, regionQuery: destinationText ?? undefined };
+    return {
+      regional: true,
+      regionQuery: destinationText ?? undefined,
+      direction,
+    };
   }
   if (COUNTRY_HINTS.some((h) => text === h || text.startsWith(h + ","))) {
-    return { regional: true, regionQuery: destinationText ?? undefined };
+    return {
+      regional: true,
+      regionQuery: destinationText ?? undefined,
+      direction,
+    };
   }
-  return { regional: false };
+  return { regional: false, direction };
 }
 
 function prettifyId(id: string): string {

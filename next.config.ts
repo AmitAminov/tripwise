@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The Google Secret Manager client is Node-only (uses `path`, `google-gax`,
+  // grpc). Keep it out of the webpack bundle so it's require()'d at runtime —
+  // otherwise instrumentation.ts / lib/secrets.ts fail with "Can't resolve 'path'".
+  serverExternalPackages: ["@google-cloud/secret-manager", "google-gax"],
   images: {
     remotePatterns: [
       // Google Places photo endpoint returns image bytes at

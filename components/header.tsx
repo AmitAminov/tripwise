@@ -7,8 +7,10 @@ export function Header({ email }: { email?: string | null }) {
       <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
         <Link
           href="/"
-          className="font-serif text-xl tracking-tight text-[color:var(--color-fg)]"
+          className="flex items-center gap-2.5 font-serif text-xl tracking-tight text-[color:var(--color-fg)]"
         >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand-emblem.png" alt="" width={30} height={30} className="rounded-md" />
           TripWise
         </Link>
         <nav className="flex items-center gap-5 text-sm">

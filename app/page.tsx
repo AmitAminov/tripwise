@@ -25,6 +25,8 @@ export default async function Home() {
       <main className="max-w-6xl mx-auto px-6 py-10 sm:py-16">
         {/* Hero */}
         <section className="mb-14 max-w-3xl">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand-emblem.png" alt="TripWise" width={72} height={72} className="mb-5" />
           <h1 className="font-serif text-4xl sm:text-5xl leading-[1.1] tracking-tight">
             Plan the trip.{" "}
             <span className="text-[color:var(--color-accent)]">Together.</span>

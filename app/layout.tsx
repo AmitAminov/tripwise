@@ -19,6 +19,24 @@ export const metadata: Metadata = {
   title: "TripWise — plan trips together",
   description:
     "Choose your destination, compare vacation options, and plan the trip. Together.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
+  openGraph: {
+    title: "TripWise — plan trips together",
+    description:
+      "Compare destinations, estimate the real cost, and build the itinerary — together.",
+    images: ["/og-image.png"],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({

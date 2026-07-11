@@ -21,10 +21,10 @@ export const metadata: Metadata = {
     "Choose your destination, compare vacation options, and plan the trip. Together.",
   icons: {
     icon: [
-      { url: "/favicon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.svg?v=2", type: "image/svg+xml" },
+      { url: "/favicon.ico?v=2", sizes: "any" },
     ],
-    apple: "/apple-touch-icon.png",
+    apple: "/apple-touch-icon.png?v=2",
   },
   openGraph: {
     title: "TripWise — plan trips together",

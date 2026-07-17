@@ -3,9 +3,9 @@
 [![CI](https://github.com/AmitAminov/tripwise/actions/workflows/ci.yml/badge.svg)](https://github.com/AmitAminov/tripwise/actions/workflows/ci.yml)
 
 A trip planner for couples that fixes the worst part of planning together:
-one partner's opinion anchoring the other's. TripWise lets both people rate
-flights, hotels, and activities **blind**, then reveals both sets of ratings
-at once — enforced in the database, not the UI.
+one partner's opinion anchoring the other's. Both people rate flights, hotels,
+and activities blind, and TripWise reveals both sets of ratings at once. That
+rule is enforced in the database, not the UI.
 
 Built with Next.js 15 / React 19 / TypeScript on Supabase, plus a small
 Python FastAPI microservice for live flight prices.
@@ -18,9 +18,9 @@ autumn trip to Italy with my girlfriend — the trip below is that real one.
 ## The problem
 
 Couples planning a trip juggle dozens of tabs (flights, hotels, weather,
-events, visas) and then negotiate — where the first person to say "I love
-this one" biases the outcome. Every group-travel tool treats this as a chat
-problem. TripWise treats it as a **decision-integrity** problem.
+events, visas) and then negotiate. Whoever says "I love this one" first biases
+the outcome. Every group-travel tool treats this as a chat problem. TripWise
+treats it as a decision-integrity problem.
 
 ## The decision arena: blind rating + delayed reveal
 
@@ -29,7 +29,7 @@ The core mechanic, enforced at the Postgres layer
 
 - Each partner rates the same options independently. A **row-level security
   policy** (`ratings_select_own_or_revealed`) makes partner ratings
-  unreadable — not just hidden — until the decision status is `revealed`.
+  unreadable, not just hidden, until the decision status is `revealed`.
 - A **trigger** on the `ratings` table calls `maybe_reveal_decision`, which
   flips a decision from `open` to `revealed` only when every trip member has
   rated every option. No client code can peek early or force a reveal.
@@ -56,13 +56,13 @@ interface ProviderResult<T> {
 }
 ```
 
-so every surface renders data provenance ("live price" vs "estimate" vs
-"cached") uniformly. Factories in
+so every surface shows where its data came from ("live price" vs "estimate" vs
+"cached") the same way. Factories in
 [`lib/providers/index.ts`](lib/providers/index.ts) pick the implementation
-from the environment: with zero API keys the app still runs — flights use a
-mock provider, events fall back to a curated seed, hotels to a
-deep-link estimator, and keyed surfaces (Places, AI images) degrade to a
-friendly "unavailable" state instead of crashing.
+from the environment. With zero API keys the app still runs: flights use a
+mock provider, events fall back to a curated seed, hotels to a deep-link
+estimator, and keyed surfaces (Places, AI images) degrade to an "unavailable"
+state instead of crashing.
 
 Supporting layers:
 
@@ -77,18 +77,18 @@ Supporting layers:
 ## Grounded AI day planning
 
 The AI day-planner ([`lib/ai/gemini.ts`](lib/ai/gemini.ts)) uses Gemini with
-**structured output** (`responseSchema`, JSON mime type) and is grounded on
-real Google Places results — the model arranges venues that actually exist
-rather than inventing them. Items are geocoded on insert, walking-time chips
-between consecutive stops come from the Google Routes API (legs computed in
-parallel), and the plan exports to Google Calendar.
+**structured output** (`responseSchema`, JSON mime type), grounded on real
+Google Places results, so the model arranges venues that actually exist instead
+of inventing them. Items are geocoded on insert, walking-time chips between
+consecutive stops come from the Google Routes API (legs computed in parallel),
+and the plan exports to Google Calendar.
 
 ## Live flight prices
 
 [`python-services/flights`](python-services/flights) is a FastAPI wrapper
-around [fast-flights](https://github.com/AWeirdDev/flights) (Google Flights
-scraping — real prices without a paid GDS), normalizing prices, durations,
-and layovers into the shape the Next.js `FlightProvider` expects.
+around [fast-flights](https://github.com/AWeirdDev/flights), which scrapes
+Google Flights for real prices without a paid GDS. It normalizes prices,
+durations, and layovers into the shape the Next.js `FlightProvider` expects.
 
 ## Stack
 

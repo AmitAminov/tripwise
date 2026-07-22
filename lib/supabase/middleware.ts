@@ -28,7 +28,27 @@ export async function updateSession(request: NextRequest) {
   );
 
   // Touching getUser() refreshes the auth token if needed.
-  await supabase.auth.getUser();
+  //
+  // Wrapped in try/catch so a Supabase outage — paused free-tier project,
+  // DNS failure, VPN flap, provider downtime — degrades gracefully instead
+  // of throwing an uncaught `AuthRetryableFetchError` on EVERY request
+  // (which surfaces as the red Next.js error overlay + console spam on
+  // every page, including fully-public ones). On failure we just proceed
+  // with no refreshed session: public pages render, auth-gated pages fall
+  // through to their own `if (!user) redirect("/login")` guard. Matches
+  // the project rule "a provider outage should degrade the surface, not
+  // crash the page."
+  try {
+    await supabase.auth.getUser();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // One concise line instead of a multi-frame stack per request.
+    console.warn(
+      `[middleware] Supabase auth unreachable (${msg}). ` +
+        `Proceeding without a refreshed session. If this persists, the ` +
+        `Supabase project may be paused — restore it in the dashboard.`,
+    );
+  }
 
   return supabaseResponse;
 }

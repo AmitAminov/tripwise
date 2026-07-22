@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, safeGetUser } from "@/lib/supabase/server";
 import { DESTINATIONS, FEATURED_DESTINATIONS } from "@/data/destinations";
 import { Header } from "@/components/header";
 import { DestinationHeroCard } from "@/components/destination-hero-card";
@@ -7,9 +7,7 @@ import { PlanningDepthSelector } from "@/components/planning-depth-selector";
 
 export default async function Home() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await safeGetUser(supabase);
 
   const { data: recentTrips } = user
     ? await supabase

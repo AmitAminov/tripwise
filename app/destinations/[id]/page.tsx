@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, safeGetUser } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { getDestination } from "@/data/destinations";
 import { formatUSD } from "@/lib/format";
@@ -21,9 +21,7 @@ export default async function DestinationDetailPage({
   if (!d) notFound();
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await safeGetUser(supabase);
 
   // Live Places + Events, in parallel. Both are optional — the page still
   // renders if the providers are absent or the calls fail.

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, safeGetUser } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import {
   DESTINATIONS,
@@ -124,9 +124,7 @@ export default async function ComparePage({
   const intent = decodeIntent(params.intent ?? null);
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await safeGetUser(supabase);
 
   // Precedence:
   //  1. ?ids= from the picker (user's explicit choice)

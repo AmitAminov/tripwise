@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, safeGetUser } from "@/lib/supabase/server";
 import { Header } from "@/components/header";
 import { PlanNowSurvey } from "./plan-now-survey";
 import { IntermediateSurvey } from "./intermediate-survey";
@@ -46,9 +46,7 @@ export default async function SurveyPage({
   const presetDestination = sp?.destination ?? null;
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await safeGetUser(supabase);
 
   const meta = DEPTH_META[depth];
 
